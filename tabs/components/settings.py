@@ -10,7 +10,7 @@ def settings():
                         f0_method = gr.Dropdown(
                             value="rmvpe",
                             label="Метод выделения тона",
-                            choices=["rmvpe", "fcpe", "crepe", "crepe-tiny"],
+                            choices=["rmvpe", "fcpe", "djcm", "crepe", "crepe-tiny"],
                             interactive=True,
                             visible=True,
                         )

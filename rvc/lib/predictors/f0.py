@@ -5,7 +5,8 @@ import torch
 import torchcrepe
 from torchfcpe import spawn_bundled_infer_model
 
-from rvc.lib.predictors.RMVPE import RMVPE0Predictor
+from rvc.lib.predictors.RMVPE import RMVPEF0Predictor
+from rvc.lib.predictors.DJCM import DJCMF0Predictor
 
 
 def median_interp_pitch(f0):
@@ -35,7 +36,19 @@ class RMVPE:
         self.device = device
         self.sample_rate = sample_rate
         self.hop_size = hop_size
-        self.model = RMVPE0Predictor(os.path.join("rvc", "models", "predictors", "rmvpe.pt"), device=self.device)
+        self.model = RMVPEF0Predictor(os.path.join("rvc", "models", "predictors", "rmvpe.pt"), device=self.device)
+
+    def get_f0(self, x, filter_radius=0.03):
+        f0 = self.model.infer_from_audio(x, thred=filter_radius)
+        return f0
+
+
+class DJCM:
+    def __init__(self, device, sample_rate=16000, hop_size=160):
+        self.device = device
+        self.sample_rate = sample_rate
+        self.hop_size = hop_size
+        self.model = DJCMF0Predictor(os.path.join("rvc", "models", "predictors", "djcm.pt"), device=self.device)
 
     def get_f0(self, x, filter_radius=0.03):
         f0 = self.model.infer_from_audio(x, thred=filter_radius)

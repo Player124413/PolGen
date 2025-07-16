@@ -39,7 +39,7 @@ def dl_model(link, model_name, dir_name):
 
 def check_and_install_models():
     try:
-        predictors_names = ["rmvpe.pt", "fcpe.pt"]
+        predictors_names = ["rmvpe.pt", "fcpe.pt", "djcm.pt"]
         for model in predictors_names:
             dl_model(PREDICTORS, model, PREDICTORS_DIR)
 

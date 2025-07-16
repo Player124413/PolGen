@@ -137,19 +137,20 @@ class VC:
         if f0_method == "crepe":
             model = CREPE(device=self.device, sample_rate=self.sample_rate, hop_size=self.window)
             f0 = model.get_f0(x, f0_min, f0_max, p_len, "full")
-            del model
         elif f0_method == "crepe-tiny":
             model = CREPE(device=self.device, sample_rate=self.sample_rate, hop_size=self.window)
             f0 = model.get_f0(x, f0_min, f0_max, p_len, "tiny")
-            del model
         elif f0_method == "rmvpe":
             model = RMVPE(device=self.device, sample_rate=self.sample_rate, hop_size=self.window)
             f0 = model.get_f0(x, filter_radius=0.03)
-            del model
         elif f0_method == "fcpe":
             model = FCPE(device=self.device, sample_rate=self.sample_rate, hop_size=self.window)
             f0 = model.get_f0(x, p_len, filter_radius=0.006)
-            del model
+        elif f0_method == "djcm":
+            model = DJCM(device=self.device, sample_rate=self.sample_rate, hop_size=self.window)
+            f0 = model.get_f0(x, p_len, filter_radius=0.03)
+        del model
+        gc.collect()
 
         if f0 is None:
             raise ValueError("Метод F0 не распознан или не смог рассчитать F0.")
