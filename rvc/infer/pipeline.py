@@ -7,7 +7,7 @@ import torch
 import torch.nn.functional as F
 from scipy import signal
 
-from rvc.lib.predictors.f0 import CREPE, FCPE, RMVPE, AutoTune, calc_pitch_shift
+from rvc.lib.predictors.f0 import DJCM, CREPE, FCPE, RMVPE, AutoTune, calc_pitch_shift
 
 # Фильтр Баттерворта для высоких частот
 bh, ah = signal.butter(N=5, Wn=48, btype="high", fs=16000)
