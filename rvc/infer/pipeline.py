@@ -134,21 +134,21 @@ class VC:
         f0_mel_min = 1127 * np.log(1 + f0_min / 700)
         f0_mel_max = 1127 * np.log(1 + f0_max / 700)
 
-        if f0_method == "crepe":
+        if f0_method == "rmvpe":
+            model = RMVPE(device=self.device, sample_rate=self.sample_rate, hop_size=self.window)
+            f0 = model.get_f0(x, filter_radius=0.03)
+        elif f0_method == "djcm":
+            model = DJCM(device=self.device, sample_rate=self.sample_rate, hop_size=self.window)
+            f0 = model.get_f0(x, filter_radius=0.03)
+        elif f0_method == "fcpe":
+            model = FCPE(device=self.device, sample_rate=self.sample_rate, hop_size=self.window)
+            f0 = model.get_f0(x, p_len, filter_radius=0.006)
+        elif f0_method == "crepe":
             model = CREPE(device=self.device, sample_rate=self.sample_rate, hop_size=self.window)
             f0 = model.get_f0(x, f0_min, f0_max, p_len, "full")
         elif f0_method == "crepe-tiny":
             model = CREPE(device=self.device, sample_rate=self.sample_rate, hop_size=self.window)
             f0 = model.get_f0(x, f0_min, f0_max, p_len, "tiny")
-        elif f0_method == "rmvpe":
-            model = RMVPE(device=self.device, sample_rate=self.sample_rate, hop_size=self.window)
-            f0 = model.get_f0(x, filter_radius=0.03)
-        elif f0_method == "fcpe":
-            model = FCPE(device=self.device, sample_rate=self.sample_rate, hop_size=self.window)
-            f0 = model.get_f0(x, p_len, filter_radius=0.006)
-        elif f0_method == "djcm":
-            model = DJCM(device=self.device, sample_rate=self.sample_rate, hop_size=self.window)
-            f0 = model.get_f0(x, p_len, filter_radius=0.03)
         del model
         gc.collect()
 
