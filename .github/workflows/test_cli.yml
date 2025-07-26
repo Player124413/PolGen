@@ -40,7 +40,8 @@ jobs:
 
     - name: Install dependencies
       run: |
-        pip install --no-cache-dir -r requirements.txt
+        pip install --no-cache-dir uv
+        uv pip install --no-cache-dir -r requirements.txt -q --system
 
     - name: Install RVC models
       run: |
@@ -88,7 +89,8 @@ jobs:
 
     - name: Install dependencies
       run: |
-        pip install --no-cache-dir -r requirements.txt
+        pip install --no-cache-dir uv
+        uv pip install --no-cache-dir -r requirements.txt -q --system
 
     - name: Install RVC models
       run: |

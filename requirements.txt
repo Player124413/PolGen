@@ -24,6 +24,7 @@ faiss-cpu==1.7.3
 local-attention
 tensorboardX
 torbi
+penn
 
 # Условные зависимости
 fairseq; python_version < '3.11'
