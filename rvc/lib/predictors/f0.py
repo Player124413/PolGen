@@ -5,7 +5,7 @@ import torch
 import torchcrepe
 from torchfcpe import spawn_bundled_infer_model
 
-from rvc.lib.predictors.RMVPE import RMVPEF0Predictor
+from rvc.lib.predictors.RMVPE import RMVPEF0Predictor, RMVPEF0PredictorV2
 
 
 def median_interp_pitch(f0):
@@ -89,12 +89,13 @@ class RMVPE:
         self.device = device
         self.sample_rate = sample_rate
         self.model = RMVPEF0Predictor(os.path.join("rvc", "models", "predictors", "rmvpe.pt"), device=self.device)
+        self.modelv2 = RMVPEF0PredictorV2(os.path.join("rvc", "models", "predictors", "rmvpe.pt"), device=self.device)
 
     def get_f0(self, audio, type_rmvpe="rmvpe"):
         if type_rmvpe == "rmvpe":
             f0 = self.model.infer_from_audio(audio, thred=0.03)
         elif type_rmvpe == "rmvpe+":
-            f0 = self.model.infer_from_audio_modified(audio, thred=0.02)
+            f0 = self.modelv2.infer_from_audio(audio, thred=0.02)
         return f0
 
 

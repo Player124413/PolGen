@@ -19,9 +19,11 @@ edge-tts
 torch==2.7.1
 torchaudio==2.7.1
 torchvision==0.22.1
+
 faiss-cpu==1.7.3
 local-attention
 tensorboardX
+torbi
 
 # Условные зависимости
 fairseq; python_version < '3.11'
