@@ -5,7 +5,8 @@ import torch
 import torchcrepe
 from torchfcpe import spawn_bundled_infer_model
 
-from rvc.lib.predictors.RMVPE import RMVPEF0Predictor, RMVPEF0PredictorV2
+from rvc.lib.predictors.RMVPE import RMVPEF0Predictor
+from rvc.lib.predictors.RMVPEv2 import RMVPEF0PredictorV2
 
 
 def median_interp_pitch(f0):
