@@ -3,10 +3,11 @@ from typing import List
 import librosa
 import numpy as np
 import torch
-import torbi
 from scipy.signal import savgol_filter
 from scipy.ndimage import label
 from librosa.filters import mel
+
+from rvc.lib.predictors.torbi import from_probabilities
 
 N_MELS = 128
 N_CLASS = 360
@@ -427,6 +428,6 @@ class RMVPEF0PredictorV2:
         trans_t = torch.from_numpy(trans).float().to(self.device)
         init_t = torch.full((N_CLASS,), 1.0 / N_CLASS, dtype=torch.float32, device=self.device)
 
-        path_t = torbi.from_probabilities(observation=obs_t, transition=trans_t, initial=init_t, log_probs=False, gpu=gpu_id)
+        path_t = from_probabilities(observation=obs_t, transition=trans_t, initial=init_t, log_probs=False, gpu=gpu_id)
         return path_t[0].cpu().numpy()
 
