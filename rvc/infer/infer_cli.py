@@ -15,7 +15,7 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 logging.basicConfig(level=logging.WARNING)
 warnings.filterwarnings("ignore")
 
-from rvc.infer.infer import rvc_edgetts_infer, rvc_infer
+from rvc.infer.infer import RVCInferer
 
 
 def strtobool(val: str) -> bool:
@@ -68,6 +68,7 @@ def create_parser():
 
 
 def main():
+    inferer = RVCInferer()
     parser = create_parser()
     args = parser.parse_args()
 
@@ -90,9 +91,9 @@ def main():
     }
 
     if args.command == "rvc":
-        rvc_infer(**common_params, input_path=args.input_path)
+        inferer.rvc_infer(**common_params, input_path=args.input_path)
     elif args.command == "tts":
-        rvc_edgetts_infer(
+        inferer.rvc_edgetts_infer(
             **common_params,
             tts_voice=args.tts_voice,
             tts_text=args.tts_text,

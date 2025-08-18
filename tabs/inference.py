@@ -1,6 +1,6 @@
 import gradio as gr
 
-from rvc.infer.infer import rvc_edgetts_infer, rvc_infer
+from rvc.infer.infer import RVCInferer
 from tabs.components.modules import (
     OUTPUT_FORMAT,
     edge_voices,
@@ -14,6 +14,8 @@ from tabs.components.modules import (
     update_visible,
 )
 from tabs.components.settings import settings
+
+inferer = RVCInferer()
 
 
 def inference_tab():
@@ -153,7 +155,7 @@ def inference_tab():
 
     # Запуск процесса преобразования
     generate_btn.click(
-        rvc_infer,
+        inferer.rvc_infer,
         inputs=[
             rvc_model,
             song_input,
@@ -336,7 +338,7 @@ def edge_tts_tab():
 
     # Запуск процесса преобразования
     generate_btn.click(
-        rvc_edgetts_infer,
+        inferer.rvc_edgetts_infer,
         inputs=[
             rvc_model,
             f0_method,
