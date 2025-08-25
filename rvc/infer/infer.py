@@ -15,17 +15,16 @@ from rvc.lib.fairseq import load_model
 from rvc.lib.my_utils import load_audio
 from rvc.modules.audio_upscaler import upscale
 
+RVC_MODELS_DIR = os.path.join(os.getcwd(), "models", "RVC_models")
+OUTPUT_DIR = os.path.join(os.getcwd(), "output", "RVC_output")
+HUBERT_BASE_PATH = os.path.join(os.getcwd(), "rvc", "models", "embedders", "hubert_base.pt")
+
+os.makedirs(RVC_MODELS_DIR, exist_ok=True)
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+
 
 class RVCInferer:
     def __init__(self):
-        # Пути
-        self.RVC_MODELS_DIR = os.path.join(os.getcwd(), "models", "RVC_models")
-        self.OUTPUT_DIR = os.path.join(os.getcwd(), "output", "RVC_output")
-        self.HUBERT_BASE_PATH = os.path.join(os.getcwd(), "rvc", "models", "embedders", "hubert_base.pt")
-
-        os.makedirs(self.RVC_MODELS_DIR, exist_ok=True)
-        os.makedirs(self.OUTPUT_DIR, exist_ok=True)
-
         # Конфиг
         self.config = Config()
 
@@ -33,7 +32,6 @@ class RVCInferer:
         self.hubert_model = None
         self.loaded_models = {}
 
-    # =============== Утилиты ===============
     def display_progress(self, percent, message, is_print, progress=gr.Progress()):
         if is_print:
             print(message)
@@ -42,7 +40,7 @@ class RVCInferer:
     def load_hubert(self):
         if self.hubert_model is None:
             self.display_progress(0.1, "Загружаем модель Hubert...", False)
-            self.hubert_model = load_model(self.HUBERT_BASE_PATH).to(self.config.device).eval()
+            self.hubert_model = load_model(HUBERT_BASE_PATH).to(self.config.device).eval()
         return self.hubert_model
 
     def load_rvc_model(self, model_name):
@@ -51,9 +49,9 @@ class RVCInferer:
 
         self.display_progress(0.2, f"Загружаем модель {model_name}...", False)
 
-        model_dir = os.path.join(self.RVC_MODELS_DIR, model_name)
+        model_dir = os.path.join(RVC_MODELS_DIR, model_name)
         if not os.path.isdir(model_dir):
-            raise FileNotFoundError(f"Папка модели {model_name} не найдена в {self.RVC_MODELS_DIR}")
+            raise FileNotFoundError(f"Папка модели {model_name} не найдена в {RVC_MODELS_DIR}")
 
         model_path = next((os.path.join(model_dir, f) for f in os.listdir(model_dir) if f.endswith(".pth")), None)
         index_path = next((os.path.join(model_dir, f) for f in os.listdir(model_dir) if f.endswith(".index")), None)
@@ -91,7 +89,6 @@ class RVCInferer:
         communicate = edge_tts.Communicate(voice=voice, text=text, rate=f"{rate:+d}%", volume=f"{volume:+d}%", pitch=f"{pitch:+d}Hz")
         await communicate.save(output_path)
 
-    # =============== Основные методы ===============
     def rvc_infer(
         self,
         rvc_model,
@@ -126,7 +123,7 @@ class RVCInferer:
         if len(base_name) > 50:
             gr.Warning("Имя файла превышает 50 символов и будет сокращено для удобства.")
             base_name = "Made_in_PolGen"
-        output_path = os.path.join(self.OUTPUT_DIR, f"{base_name}_({rvc_model}).{output_format}")
+        output_path = os.path.join(OUTPUT_DIR, f"{base_name}_({rvc_model}).{output_format}")
 
         self.display_progress(0.3, "Загружаем аудио...", False)
         audio = load_audio(input_path, 16000)
@@ -161,7 +158,7 @@ class RVCInferer:
 
         if audio_upscaling:
             self.display_progress(0.9, "[🚀] Улучшаем качество аудио...", True)
-            upscale(output_path, self.OUTPUT_DIR, 2, self.config.device)
+            upscale(output_path, OUTPUT_DIR, 2, self.config.device)
 
         torch.cuda.empty_cache()
         gc.collect()
@@ -171,21 +168,55 @@ class RVCInferer:
 
     def rvc_edgetts_infer(
         self,
-        rvc_model,
-        tts_voice,
-        tts_text,
+        # RVC
+        rvc_model=None,
+        f0_method="rmvpe",
+        f0_min=50,
+        f0_max=1100,
+        rvc_pitch=0,
+        protect=0.5,
+        index_rate=0,
+        volume_envelope=1,
+        autopitch=False,
+        autopitch_threshold=155.0,
+        autotune=False,
+        autotune_strength=1.0,
+        stereo_sound=False,
+        output_format="wav",
+        # EdgeTTS
+        tts_voice=None,
+        tts_text=None,
         tts_rate=0,
         tts_volume=0,
         tts_pitch=0,
-        **kwargs,
+        # FlashSR
+        audio_upscaling=False,
+        progress=gr.Progress(track_tqdm=True),
     ):
         if not tts_text:
             raise ValueError("Введите текст!")
         if not tts_voice:
             raise ValueError("Выберите голос!")
 
-        input_path = os.path.join(self.OUTPUT_DIR, "TTS_Voice.wav")
+        input_path = os.path.join(OUTPUT_DIR, "TTS_Voice.wav")
         asyncio.run(self.text_to_speech(tts_voice, tts_text, tts_rate, tts_volume, tts_pitch, input_path))
 
-        output = self.rvc_infer(rvc_model=rvc_model, input_path=input_path, **kwargs)
+        output = self.rvc_infer(
+            rvc_model=rvc_model,
+            input_path=input_path,
+            f0_method=f0_method,
+            f0_min=f0_min,
+            f0_max=f0_max,
+            rvc_pitch=rvc_pitch,
+            protect=protect,
+            index_rate=index_rate,
+            volume_envelope=volume_envelope,
+            autopitch=autopitch,
+            autopitch_threshold=autopitch_threshold,
+            autotune=autotune,
+            autotune_strength=autotune_strength,
+            audio_upscaling=audio_upscaling,
+            stereo_sound=stereo_sound,
+            output_format=output_format,
+        )
         return input_path, output
