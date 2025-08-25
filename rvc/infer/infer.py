@@ -47,8 +47,15 @@ class RVCInferer:
         if model_name in self.loaded_models:
             return self.loaded_models[model_name]
 
-        self.display_progress(0.2, f"Загружаем модель {model_name}...", False)
+        # ограничение размера кэша (макс 5 моделей)
+        if len(self.loaded_models) >= 5:
+            oldest_model = next(iter(self.loaded_models))
+            gr.Warning(f"Превышен лимит кэша моделей (6/5). Автовыгрузка старой модели {oldest_model}")
+            del self.loaded_models[oldest_model]
+            torch.cuda.empty_cache()
+            gc.collect()
 
+        self.display_progress(0.2, f"Загружаем модель {model_name}...", False)
         model_dir = os.path.join(RVC_MODELS_DIR, model_name)
         if not os.path.isdir(model_dir):
             raise FileNotFoundError(f"Папка модели {model_name} не найдена в {RVC_MODELS_DIR}")
