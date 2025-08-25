@@ -42,7 +42,7 @@ class RVCInferer:
     def load_hubert(self):
         if self.hubert_model is None:
             self.display_progress(0.1, "Загружаем модель Hubert...", False)
-            self.hubert_model = load_model(self.HUBERT_BASE_PATH).to(config.device).eval()
+            self.hubert_model = load_model(self.HUBERT_BASE_PATH).to(self.config.device).eval()
         return self.hubert_model
 
     def load_rvc_model(self, model_name):
@@ -76,7 +76,7 @@ class RVCInferer:
         net_g = Synthesizer(*cpt["config"], use_f0=use_f0, text_enc_hidden_dim=input_dim, vocoder=vocoder)
         del net_g.enc_q
         net_g.load_state_dict(cpt["weight"], strict=False)
-        net_g = net_g.to(config.device).float().eval()
+        net_g = net_g.to(self.config.device).float().eval()
 
         vc = VC(tgt_sr, self.config)
 
@@ -161,7 +161,7 @@ class RVCInferer:
 
         if audio_upscaling:
             self.display_progress(0.9, "[🚀] Улучшаем качество аудио...", True)
-            upscale(output_path, self.OUTPUT_DIR, 2, config.device)
+            upscale(output_path, self.OUTPUT_DIR, 2, self.config.device)
 
         torch.cuda.empty_cache()
         gc.collect()
