@@ -126,6 +126,7 @@ def inference_tab():
         autotune_tonic,
         autotune_scale,
         autotune_strength,
+        autotune_retune_speed,
         f0_min,
         f0_max,
     ) = settings()
@@ -143,7 +144,7 @@ def inference_tab():
     autopitch.change(update_visible, inputs=autopitch, outputs=[autopitch_threshold, rvc_pitch])
 
     # Показать параметры автотюна
-    autotune.change(show_autotune, inputs=autotune, outputs=[autotune_tonic, autotune_scale, autotune_strength])
+    autotune.change(show_autotune, inputs=autotune, outputs=[autotune_tonic, autotune_scale, autotune_strength, autotune_retune_speed])
 
     # Обновление списка моделей
     ref_btn.click(update_models_list, None, outputs=rvc_model)
@@ -167,6 +168,7 @@ def inference_tab():
             autotune_tonic,
             autotune_scale,
             autotune_strength,
+            autotune_retune_speed,
             audio_upscaling,
             stereo_sound,
             output_format,
@@ -313,6 +315,7 @@ def edge_tts_tab():
         autotune_tonic,
         autotune_scale,
         autotune_strength,
+        autotune_retune_speed,
         f0_min,
         f0_max,
     ) = settings()
@@ -324,7 +327,7 @@ def edge_tts_tab():
     autopitch.change(update_visible, inputs=autopitch, outputs=[autopitch_threshold, rvc_pitch])
 
     # Показать параметры автотюна
-    autotune.change(show_autotune, inputs=autotune, outputs=[autotune_tonic, autotune_scale, autotune_strength])
+    autotune.change(show_autotune, inputs=autotune, outputs=[autotune_tonic, autotune_scale, autotune_strength, autotune_retune_speed])
 
     # Обновление списка моделей
     ref_btn.click(update_models_list, None, outputs=rvc_model)
@@ -347,6 +350,7 @@ def edge_tts_tab():
             autotune_tonic,
             autotune_scale,
             autotune_strength,
+            autotune_retune_speed,
             stereo_sound,
             output_format,
             tts_voice,

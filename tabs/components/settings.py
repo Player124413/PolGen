@@ -77,6 +77,7 @@ def settings():
                                         autotune_tonic = gr.Dropdown(
                                             value="C",
                                             label="Тоника",
+                                            info="Основная, главная нота гаммы, которая задаёт тональность песни.",
                                             choices=[
                                                 "C",
                                                 "C#",
@@ -102,6 +103,7 @@ def settings():
                                         autotune_scale = gr.Dropdown(
                                             value="chromatic",
                                             label="Гамма/Лад",
+                                            info="Музыкальный лад, который определяет, на какие ноты будет корректироваться голос.",
                                             choices=[
                                                 "chromatic",
                                                 "major",
@@ -119,15 +121,27 @@ def settings():
                                             interactive=True,
                                             visible=False,
                                         )
-                                    autotune_strength = gr.Slider(
-                                        minimum=0,
-                                        maximum=1,
-                                        step=0.1,
-                                        value=1,
-                                        label="Сила коррекции",
-                                        interactive=True,
-                                        visible=False,
-                                    )
+                                    with gr.Row():
+                                        autotune_strength = gr.Slider(
+                                            minimum=0,
+                                            maximum=1,
+                                            step=0.1,
+                                            value=1,
+                                            label="Сила коррекции",
+                                            info="Управляет агрессивностью питч-коррекции. Значение 1.0 даёт сильный, «роботизированный» эффект, моментально притягивая голос к целевой ноте. Значение, близкое к 0.0, делает коррекцию более мягкой и незаметной.",
+                                            interactive=True,
+                                            visible=False,
+                                        )
+                                        autotune_retune_speed = gr.Slider(
+                                            minimum=0,
+                                            maximum=1,
+                                            step=0.1,
+                                            value=1,
+                                            label="Скорость коррекции",
+                                            info="Определяет, как быстро голос будет «скользить» к целевой ноте. Высокое значение приводит к мгновенному переходу, а низкое — к плавному, более естественному смещению.",
+                                            interactive=True,
+                                            visible=False,
+                                        )
                         with gr.Row(variant="panel"):
                             f0_min = gr.Slider(
                                 minimum=1,
@@ -161,6 +175,7 @@ def settings():
         autotune_tonic,
         autotune_scale,
         autotune_strength,
+        autotune_retune_speed,
         f0_min,
         f0_max,
     )

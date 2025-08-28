@@ -40,7 +40,8 @@ def create_parser():
     base.add_argument("--autotune", type=lambda x: bool(strtobool(x)), default=False, help="Коррекция высоты тона")
     base.add_argument("--autotune_tonic", type=str, default="C", help="Тоника (основная нота) гаммы")
     base.add_argument("--autotune_scale", type=str, default="chromatic", help="Музыкальная гамма")
-    base.add_argument("--autotune_strength", type=float, default=1.0, help="Сила автотюна")
+    base.add_argument("--autotune_strength", type=float, default=1.0, help="Сила коррекции")
+    base.add_argument("--autotune_retune_speed", type=float, default=0.5, help="Скорость коррекции")
     base.add_argument("--upscale", type=lambda x: bool(strtobool(x)), default=False, help="Улучшение качества звука")
     base.add_argument("--stereo", type=lambda x: bool(strtobool(x)), default=False, help="Преобразование моно звука в стерео")
     base.add_argument("--output_format", type=str, default="mp3", help="Формат выходного файла")
@@ -83,6 +84,7 @@ def main():
         "autotune_tonic": args.autotune_tonic,
         "autotune_scale": args.autotune_scale,
         "autotune_strength": args.autotune_strength,
+        "autotune_retune_speed": args.autotune_retune_speed,
         "audio_upscaling": args.upscale,
         "stereo_sound": args.stereo,
         "output_format": args.output_format,

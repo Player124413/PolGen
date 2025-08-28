@@ -10,10 +10,10 @@ from pydub import AudioSegment
 
 from rvc.infer.config import Config
 from rvc.infer.pipeline import VC
+from rvc.infer.utils.audio_upscaler import upscale
 from rvc.lib.algorithm.synthesizers import Synthesizer
 from rvc.lib.fairseq import load_model
 from rvc.lib.my_utils import load_audio
-from rvc.modules.audio_upscaler import upscale
 
 # Определяем пути к папкам и файлам (константы)
 RVC_MODELS_DIR = os.path.join(os.getcwd(), "models", "RVC_models")
@@ -114,6 +114,7 @@ def rvc_infer(
     autotune_tonic="C",
     autotune_scale="chromatic",
     autotune_strength=1.0,
+    autotune_retune_speed=0.5,
     audio_upscaling=False,  # FlashSR
     stereo_sound=False,
     output_format="wav",
@@ -169,6 +170,7 @@ def rvc_infer(
         autotune_tonic=autotune_tonic,
         autotune_scale=autotune_scale,
         autotune_strength=autotune_strength,
+        autotune_retune_speed=autotune_retune_speed,
     )
     # Сохраняем файл и конвертируем его в выбранный формат
     display_progress(0.8, "[💫] Сохраняем результат...", True)
@@ -207,6 +209,7 @@ def rvc_edgetts_infer(
     autotune_tonic="C",
     autotune_scale="chromatic",
     autotune_strength=1.0,
+    autotune_retune_speed=0.5,
     stereo_sound=False,
     output_format="wav",
     # EdgeTTS
@@ -244,6 +247,7 @@ def rvc_edgetts_infer(
         autotune_tonic=autotune_tonic,
         autotune_scale=autotune_scale,
         autotune_strength=autotune_strength,
+        autotune_retune_speed=autotune_retune_speed,
         audio_upscaling=audio_upscaling,
         stereo_sound=stereo_sound,
         output_format=output_format,

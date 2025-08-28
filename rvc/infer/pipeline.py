@@ -8,7 +8,8 @@ import torch.nn.functional as F
 from scipy import signal
 from tqdm import tqdm
 
-from rvc.lib.predictors.f0 import CREPE, FCPE, RMVPE, AutoTune, calc_pitch_shift
+from rvc.infer.utils.autotune import AutoTune
+from rvc.lib.predictors.f0 import CREPE, FCPE, RMVPE, calc_pitch_shift
 
 # Фильтр Баттерворта для высоких частот
 bh, ah = signal.butter(N=5, Wn=48, btype="high", fs=16000)
@@ -68,6 +69,7 @@ class VC:
         autotune_tonic,
         autotune_scale,
         autotune_strength,
+        autotune_retune_speed,
     ):
         """Получает F0 с использованием выбранного метода."""
         f0 = None
@@ -96,8 +98,8 @@ class VC:
 
         # АвтоТюн (коррекция высоты тона)
         if autotune is True:
-            AT = AutoTune(scale_name=autotune_scale, tonic_note=autotune_tonic)
-            f0 = AT.apply_autotune(f0, autotune_strength)
+            AT = AutoTune(scale=autotune_scale, tonic=autotune_tonic)
+            f0 = AT.apply(f0=f0, strength=autotune_strength, retune_speed=autotune_retune_speed)
 
         f0 = np.multiply(f0, pow(2, pitch / 12))
         f0_mel = 1127 * np.log(1 + f0 / 700)
@@ -206,6 +208,7 @@ class VC:
         autotune_tonic,
         autotune_scale,
         autotune_strength,
+        autotune_retune_speed,
     ):
         """Основной конвейер для преобразования аудио."""
         index = big_npy = None
@@ -253,6 +256,7 @@ class VC:
                 autotune_tonic,
                 autotune_scale,
                 autotune_strength,
+                autotune_retune_speed,
             )
             pitch = pitch[:p_len]
             pitchf = pitchf[:p_len]
