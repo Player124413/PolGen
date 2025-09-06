@@ -88,7 +88,7 @@ class VC:
             del model
         elif f0_method == "swift":
             model = SWIFT(device=self.device, sample_rate=self.sample_rate, hop_size=self.window)
-            f0 = model.get_f0(x, f0_min, f0_max, p_len, confidence_threshold=0.887)
+            f0 = model.get_f0(audio, f0_min, f0_max, p_len, confidence_threshold=0.887)
             del model
 
         if f0 is None:
