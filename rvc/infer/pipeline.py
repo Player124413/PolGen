@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from scipy import signal
 from tqdm import tqdm
 
-from rvc.lib.predictors.f0 import CREPE, FCPE, RMVPE, AutoTune, calc_pitch_shift
+from rvc.lib.predictors.f0 import CREPE, FCPE, RMVPE, SWIFT, AutoTune, calc_pitch_shift
 
 # Фильтр Баттерворта для высоких частот
 bh, ah = signal.butter(N=5, Wn=48, btype="high", fs=16000)
@@ -85,6 +85,10 @@ class VC:
         elif f0_method == "fcpe":
             model = FCPE(device=self.device, sample_rate=self.sample_rate, hop_size=self.window)
             f0 = model.get_f0(audio, p_len)
+            del model
+        elif f0_method == "swift":
+            model = SWIFT(device=self.device, sample_rate=self.sample_rate, hop_size=self.window)
+            f0 = model.get_f0(x, f0_min, f0_max, p_len, confidence_threshold=0.887)
             del model
 
         if f0 is None:

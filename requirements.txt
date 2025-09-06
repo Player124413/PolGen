@@ -15,6 +15,7 @@ PolUVR[gpu]
 ffmpeg-python>=0.2.0
 
 # Отслеживание высоты тона
+swift_f0
 torchfcpe
 torchcrepe
 
