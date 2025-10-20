@@ -25,7 +25,6 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # Инициализация конфигурации и HuBERT
 config = Config()
-hubert = load_model(HUBERT_BASE_PATH).to(config.device).eval()
 
 
 # Отображает прогресс выполнения задачи.
@@ -123,6 +122,7 @@ def rvc_infer(
     # Загружаем модель RVC и индекс
     display_progress(0.2, f"Загружаем модель '{rvc_model}'...", False)
     model_path, index_path = load_rvc_model(rvc_model)
+    hubert = load_model(HUBERT_BASE_PATH).to(config.device).eval()
     # Получаем конвертер голоса
     display_progress(0.3, "Получаем конвертер голоса...", False)
     cpt, version, net_g, tgt_sr, vc, use_f0 = get_vc(model_path)
