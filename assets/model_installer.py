@@ -20,6 +20,7 @@ os.makedirs(FLASH_SR_DIR, exist_ok=True)
 def dl_model(link, model_name, dir_name):
     file_path = os.path.join(dir_name, model_name)
     if os.path.exists(file_path):
+        print(os.path.exists(file_path))
         return  # Пропускаем загрузку, если файл уже существует
 
     r = requests.get(f"{link}{model_name}", stream=True)
