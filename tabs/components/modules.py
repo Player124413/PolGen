@@ -79,15 +79,5 @@ def swap_buttons():
     return gr.update(visible=False), gr.update(visible=True)
 
 
-def update_visible(autopitch):
-    if autopitch:
-        return gr.update(visible=True), gr.update(visible=False)
-    return gr.update(visible=False), gr.update(visible=True)
-
-
-def show_autotune(autotune):
-    return gr.update(visible=autotune), gr.update(visible=autotune), gr.update(visible=autotune)
-
-
 def output_message():
     return gr.Text(label="Сообщение вывода", interactive=False)

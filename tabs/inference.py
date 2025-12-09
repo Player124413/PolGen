@@ -6,14 +6,22 @@ from tabs.components.modules import (
     edge_voices,
     get_folders,
     process_file_upload,
-    show_autotune,
     swap_buttons,
     swap_visibility,
     update_edge_voices,
     update_models_list,
-    update_visible,
 )
 from tabs.components.settings import settings
+
+
+# Типы голосов для AutoPitch
+VOICE_TYPES = [
+    ("Бас (низкий мужской)", "bass"),
+    ("Баритон (средний мужской)", "baritone"),
+    ("Тенор (высокий мужской)", "tenor"),
+    ("Альт (низкий женский)", "alto"),
+    ("Сопрано (высокий женский)", "soprano"),
+]
 
 
 def inference_tab():
@@ -39,10 +47,10 @@ def inference_tab():
                     interactive=True,
                     visible=True,
                 )
-                autopitch_threshold = gr.Radio(
-                    value=155.0,
-                    choices=[("Мужская модель", 155.0), ("Женская модель", 255.0)],
-                    show_label=False,
+                autopitch_model_type = gr.Dropdown(
+                    value="baritone",
+                    label="Тип голоса модели",
+                    choices=VOICE_TYPES,
                     interactive=True,
                     visible=False,
                 )
@@ -52,7 +60,7 @@ def inference_tab():
                     step=1,
                     value=0,
                     label="Регулировка высоты тона",
-                    info="-24 — Мужская модель | 24 — Женская модель",
+                    info="-24 — ниже | +24 — выше",
                     interactive=True,
                     visible=True,
                 )
@@ -126,6 +134,10 @@ def inference_tab():
         autotune_tonic,
         autotune_scale,
         autotune_strength,
+        autotune_retune_speed,
+        autotune_flex_tune,
+        autotune_preserve_vibrato,
+        autotune_humanize,
         f0_min,
         f0_max,
     ) = settings()
@@ -139,11 +151,12 @@ def inference_tab():
     show_upload_button.click(swap_buttons, outputs=[show_upload_button, show_enter_button])
     show_enter_button.click(swap_buttons, outputs=[show_enter_button, show_upload_button])
 
-    # Обновление метода регулировки высоты тона
-    autopitch.change(update_visible, inputs=autopitch, outputs=[autopitch_threshold, rvc_pitch])
-
-    # Показать параметры автотюна
-    autotune.change(show_autotune, inputs=autotune, outputs=[autotune_tonic, autotune_scale, autotune_strength])
+    # Показать/скрыть тип голоса модели при включении autopitch
+    autopitch.change(
+        lambda x: (gr.update(visible=x), gr.update(visible=not x)),
+        inputs=autopitch,
+        outputs=[autopitch_model_type, rvc_pitch],
+    )
 
     # Обновление списка моделей
     ref_btn.click(update_models_list, None, outputs=rvc_model)
@@ -162,11 +175,15 @@ def inference_tab():
             index_rate,
             volume_envelope,
             autopitch,
-            autopitch_threshold,
+            autopitch_model_type,
             autotune,
             autotune_tonic,
             autotune_scale,
             autotune_strength,
+            autotune_retune_speed,
+            autotune_flex_tune,
+            autotune_preserve_vibrato,
+            autotune_humanize,
             audio_upscaling,
             stereo_sound,
             output_format,
@@ -214,10 +231,10 @@ def edge_tts_tab():
                         interactive=True,
                         visible=True,
                     )
-                    autopitch_threshold = gr.Radio(
-                        value=155.0,
-                        choices=[("Мужская модель", 155.0), ("Женская модель", 255.0)],
-                        show_label=False,
+                    autopitch_model_type = gr.Dropdown(
+                        value="baritone",
+                        label="Тип голоса модели",
+                        choices=VOICE_TYPES,
                         interactive=True,
                         visible=False,
                     )
@@ -227,12 +244,12 @@ def edge_tts_tab():
                         step=1,
                         value=0,
                         label="Регулировка высоты тона",
-                        info="-24 — Мужская модель || 24 — Женская модель",
+                        info="-24 — ниже | +24 — выше",
                         interactive=True,
                         visible=True,
                     )
             synth_voice = gr.Audio(
-                label="Синтзированный TTS голос",
+                label="Синтезированный TTS голос",
                 show_download_button=True,
                 show_share_button=False,
                 interactive=False,
@@ -248,7 +265,7 @@ def edge_tts_tab():
                     step=1,
                     value=0,
                     label="Регулировка высоты тона TTS",
-                    info="-100 - мужской голос || 100 - женский голос",
+                    info="-100 — ниже | +100 — выше",
                     interactive=True,
                     visible=True,
                 )
@@ -258,7 +275,7 @@ def edge_tts_tab():
                     step=1,
                     value=0,
                     label="Громкость речи",
-                    info="Громкость воспроизведения синтеза речи",
+                    info="Громкость синтеза речи",
                     interactive=True,
                     visible=True,
                 )
@@ -268,7 +285,7 @@ def edge_tts_tab():
                     step=1,
                     value=0,
                     label="Скорость речи",
-                    info="Скорость воспроизведения синтеза речи",
+                    info="Скорость синтеза речи",
                     interactive=True,
                     visible=True,
                 )
@@ -313,6 +330,10 @@ def edge_tts_tab():
         autotune_tonic,
         autotune_scale,
         autotune_strength,
+        autotune_retune_speed,
+        autotune_flex_tune,
+        autotune_preserve_vibrato,
+        autotune_humanize,
         f0_min,
         f0_max,
     ) = settings()
@@ -320,11 +341,12 @@ def edge_tts_tab():
     # Обновление списка TTS-голосов
     language.change(update_edge_voices, inputs=language, outputs=tts_voice)
 
-    # Обновление метода регулировки высоты тона
-    autopitch.change(update_visible, inputs=autopitch, outputs=[autopitch_threshold, rvc_pitch])
-
-    # Показать параметры автотюна
-    autotune.change(show_autotune, inputs=autotune, outputs=[autotune_tonic, autotune_scale, autotune_strength])
+    # Показать/скрыть тип голоса модели при включении autopitch
+    autopitch.change(
+        lambda x: (gr.update(visible=x), gr.update(visible=not x)),
+        inputs=autopitch,
+        outputs=[autopitch_model_type, rvc_pitch],
+    )
 
     # Обновление списка моделей
     ref_btn.click(update_models_list, None, outputs=rvc_model)
@@ -342,11 +364,15 @@ def edge_tts_tab():
             index_rate,
             volume_envelope,
             autopitch,
-            autopitch_threshold,
+            autopitch_model_type,
             autotune,
             autotune_tonic,
             autotune_scale,
             autotune_strength,
+            autotune_retune_speed,
+            autotune_flex_tune,
+            autotune_preserve_vibrato,
+            autotune_humanize,
             stereo_sound,
             output_format,
             tts_voice,

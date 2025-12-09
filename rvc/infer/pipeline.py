@@ -8,14 +8,12 @@ import torch.nn.functional as F
 from scipy import signal
 from tqdm import tqdm
 
-from rvc.lib.predictors.f0 import CREPE, FCPE, RMVPE, AutoTune
-from rvc.lib.pitch import calculate_pitch_shift
+from rvc.lib.predictors.f0 import CREPE, FCPE, RMVPE
+from rvc.lib.pitch import calculate_pitch_shift, AutoTune, AutoTuneConfig
 
-# Фильтр Баттерворта для высоких частот
 bh, ah = signal.butter(N=5, Wn=48, btype="high", fs=16000)
 
 
-# Класс для обработки аудио
 class AudioProcessor:
     @staticmethod
     def change_rms(
@@ -36,7 +34,6 @@ class AudioProcessor:
         return adjusted_audio
 
 
-# Класс для преобразования голоса
 class VC:
     def __init__(self, tgt_sr, config):
         """Инициализация параметров для преобразования голоса."""
@@ -64,11 +61,15 @@ class VC:
         f0_max,
         f0_method,
         autopitch,
-        autopitch_threshold,
+        autopitch_model_type,
         autotune,
         autotune_tonic,
         autotune_scale,
         autotune_strength,
+        autotune_retune_speed,
+        autotune_flex_tune,
+        autotune_preserve_vibrato,
+        autotune_humanize,
     ):
         """Получает F0 с использованием выбранного метода."""
         f0 = None
@@ -91,15 +92,24 @@ class VC:
         if f0 is None:
             raise ValueError("Метод F0 не распознан или не смог рассчитать F0.")
 
-        # АвтоПитч (автоматическое определение высоты тона)
-        if autopitch is True:
-            model_type = "male" if autopitch_threshold < 200 else "female"
-            pitch += calculate_pitch_shift(f0, model_type=model_type)
+        # AutoPitch
+        if autopitch:
+            pitch += calculate_pitch_shift(f0, model_type=autopitch_model_type)
+            print(str(pitch))
 
-        # АвтоТюн (коррекция высоты тона)
-        if autotune is True:
-            AT = AutoTune(scale_name=autotune_scale, tonic_note=autotune_tonic)
-            f0 = AT.apply_autotune(f0, autotune_strength)
+        # AutoTune
+        if autotune:
+            config = AutoTuneConfig(
+                scale_name=autotune_scale,
+                tonic_note=autotune_tonic,
+                correction_strength=autotune_strength,
+                retune_speed_ms=autotune_retune_speed,
+                flex_tune=autotune_flex_tune,
+                preserve_vibrato=autotune_preserve_vibrato,
+                humanize=autotune_humanize,
+            )
+            autotune_processor = AutoTune(config=config)
+            f0 = autotune_processor.apply(f0)
 
         f0 = np.multiply(f0, pow(2, pitch / 12))
         f0_mel = 1127 * np.log(1 + f0 / 700)
@@ -203,11 +213,15 @@ class VC:
         version,
         protect,
         autopitch,
-        autopitch_threshold,
+        autopitch_model_type,
         autotune,
         autotune_tonic,
         autotune_scale,
         autotune_strength,
+        autotune_retune_speed=0.0,
+        autotune_flex_tune=0.0,
+        autotune_preserve_vibrato=0.0,
+        autotune_humanize=0.0,
     ):
         """Основной конвейер для преобразования аудио."""
         index = big_npy = None
@@ -242,7 +256,7 @@ class VC:
 
         pitch_tensor = pitchf_tensor = None
         if pitch_guidance:
-            pitch, pitchf = self.get_f0(
+            pitch_result, pitchf = self.get_f0(
                 audio_pad,
                 p_len,
                 pitch,
@@ -250,19 +264,23 @@ class VC:
                 f0_max,
                 f0_method,
                 autopitch,
-                autopitch_threshold,
+                autopitch_model_type,
                 autotune,
                 autotune_tonic,
                 autotune_scale,
                 autotune_strength,
+                autotune_retune_speed,
+                autotune_flex_tune,
+                autotune_preserve_vibrato,
+                autotune_humanize,
             )
-            pitch = pitch[:p_len]
+            pitch_result = pitch_result[:p_len]
             pitchf = pitchf[:p_len]
 
             if self.device == "mps":
                 pitchf = pitchf.astype(np.float32)
 
-            pitch_tensor = torch.tensor(pitch, device=self.device).unsqueeze(0).long()
+            pitch_tensor = torch.tensor(pitch_result, device=self.device).unsqueeze(0).long()
             pitchf_tensor = torch.tensor(pitchf, device=self.device).unsqueeze(0).float()
 
         for t in tqdm(opt_ts, desc="Конвертация"):

@@ -14,58 +14,46 @@ from rvc.lib.fairseq import load_model
 from rvc.lib.my_utils import load_audio, save_audio
 from rvc.modules.audio_upscaler import upscale
 
-# Определяем пути к папкам и файлам (константы)
 RVC_MODELS_DIR = os.path.join(os.getcwd(), "models", "RVC_models")
 OUTPUT_DIR = os.path.join(os.getcwd(), "output", "RVC_output")
 HUBERT_BASE_PATH = os.path.join(os.getcwd(), "rvc", "models", "embedders", "hubert_base.pt")
 
-# Создаем папки, если их нет
 os.makedirs(RVC_MODELS_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# Инициализация конфигурации
 config = Config()
 
 
-# Отображает прогресс выполнения задачи.
 def display_progress(percent, message, is_print, progress=gr.Progress()):
     if is_print:
         print(message)
     progress(percent, desc=message)
 
 
-# Загружает модель RVC и индекс по имени модели.
 def load_rvc_model(rvc_model):
     model_dir = os.path.join(RVC_MODELS_DIR, rvc_model)
     if not os.path.isdir(model_dir):
         raise FileNotFoundError(f"Папка модели {rvc_model} не найдена в {RVC_MODELS_DIR}")
 
-    # Находим файл модели с расширением .pth
     rvc_model_path = next((os.path.join(model_dir, f) for f in os.listdir(model_dir) if f.endswith(".pth")), None)
-    # Находим файл индекса с расширением .index
     rvc_index_path = next((os.path.join(model_dir, f) for f in os.listdir(model_dir) if f.endswith(".index")), None)
 
-    # Проверяем, существует ли файл модели
     if not rvc_model_path:
         raise FileNotFoundError(f"Модель {rvc_model} не содержит .pth файла!")
 
     return rvc_model_path, rvc_index_path
 
 
-# Загружает модель Hubert
 def load_hubert(model_path):
     hubert = load_model(model_path).to(config.device).eval()
     return hubert
 
 
-# Получает конвертер голоса
 def get_vc(model_path):
-    # Загружаем состояние модели
     cpt = torch.load(model_path, map_location="cpu", weights_only=True)
     if "config" not in cpt or "weight" not in cpt:
         raise ValueError(f"Некорректный формат модели {model_path}. Используйте модель RVC.")
 
-    # Извлекаем параметры модели
     tgt_sr = cpt["config"][-1]
     cpt["config"][-3] = cpt["weight"]["emb_g.weight"].shape[0]
 
@@ -74,20 +62,16 @@ def get_vc(model_path):
     vocoder = cpt.get("vocoder", "HiFi-GAN")
     input_dim = 768 if version == "v2" else 256
 
-    # Инициализируем синтезатор
     net_g = Synthesizer(*cpt["config"], use_f0=use_f0, text_enc_hidden_dim=input_dim, vocoder=vocoder)
 
-    # Удаляем ненужный слой
     del net_g.enc_q
     net_g.load_state_dict(cpt["weight"], strict=False)
     net_g = net_g.to(config.device).float().eval()
 
-    # Инициализируем объект конвертера голоса
     vc = VC(tgt_sr, config)
     return cpt, version, net_g, tgt_sr, vc, use_f0
 
 
-# Синтезирует текст в речь с использованием edge_tts.
 async def text_to_speech(voice, text, rate, volume, pitch, output_path):
     if not -100 <= rate <= 100 or not -100 <= volume <= 100 or not -100 <= pitch <= 100:
         raise ValueError("Параметры Rate, Volume и Pitch должны быть в диапазоне от -100 до +100.")
@@ -96,7 +80,6 @@ async def text_to_speech(voice, text, rate, volume, pitch, output_path):
     await communicate.save(output_path)
 
 
-# Выполнение инференса с использованием RVC
 def rvc_infer(
     rvc_model=None,
     input_path=None,
@@ -108,12 +91,16 @@ def rvc_infer(
     index_rate=0,
     volume_envelope=1,
     autopitch=False,
-    autopitch_threshold=155.0,
+    autopitch_model_type="baritone",
     autotune=False,
     autotune_tonic="C",
     autotune_scale="chromatic",
     autotune_strength=1.0,
-    audio_upscaling=False,  # FlashSR
+    autotune_retune_speed=0.0,
+    autotune_flex_tune=0.0,
+    autotune_preserve_vibrato=0.0,
+    autotune_humanize=0.0,
+    audio_upscaling=False,
     stereo_sound=False,
     output_format="wav",
     progress=gr.Progress(track_tqdm=True),
@@ -125,24 +112,21 @@ def rvc_infer(
 
     display_progress(0, "\n[⚙️] Запуск конвейера генерации...", True)
 
-    # Загружаем модель Hubert
     display_progress(0.1, "Загружаем модель HuBERT...", False)
     hubert_model = load_hubert(HUBERT_BASE_PATH)
-    # Загружаем модель RVC и индекс
+
     display_progress(0.2, f"Загружаем модель '{rvc_model}'...", False)
     model_path, index_path = load_rvc_model(rvc_model)
-    # Получаем конвертер голоса
+
     display_progress(0.3, "Получаем конвертер голоса...", False)
     cpt, version, net_g, tgt_sr, vc, use_f0 = get_vc(model_path)
 
-    # Построение имени выходного файла
     base_name = os.path.splitext(os.path.basename(input_path))[0]
     if len(base_name) > 50:
-        gr.Warning("Имя файла превышает 50 символов и будет сокращено для удобства.")
-        base_name = "Made_in_PolGen"  # Сменить имя файла, если длина исходного более 50 символов
+        gr.Warning("Имя файла превышает 50 символов и будет сокращено.")
+        base_name = "Made_in_PolGen"
     output_path = os.path.join(OUTPUT_DIR, f"{base_name}_({rvc_model}).{output_format}")
 
-    # Загружаем аудиофайл
     display_progress(0.4, "Загружаем аудио...", False)
     audio = load_audio(input_path, 16000)
 
@@ -163,14 +147,17 @@ def rvc_infer(
         version=version,
         protect=protect,
         autopitch=autopitch,
-        autopitch_threshold=autopitch_threshold,
+        autopitch_model_type=autopitch_model_type,
         autotune=autotune,
         autotune_tonic=autotune_tonic,
         autotune_scale=autotune_scale,
         autotune_strength=autotune_strength,
+        autotune_retune_speed=autotune_retune_speed,
+        autotune_flex_tune=autotune_flex_tune,
+        autotune_preserve_vibrato=autotune_preserve_vibrato,
+        autotune_humanize=autotune_humanize,
     )
-    
-    # Сохраняем файл
+
     display_progress(0.8, "[💫] Сохраняем результат...", True)
     save_audio(audio_opt, tgt_sr, output_path, output_format, stereo_sound)
 
@@ -178,7 +165,6 @@ def rvc_infer(
         display_progress(0.9, "[🚀] Улучшаем качество аудио...", True)
         upscale(output_path, OUTPUT_DIR, 2, config.device)
 
-    # Освобождаем память
     display_progress(0.95, "Освобождаем память...", False)
     del hubert_model, cpt, net_g, vc
     gc.collect()
@@ -189,7 +175,6 @@ def rvc_infer(
 
 
 def rvc_edgetts_infer(
-    # RVC
     rvc_model=None,
     f0_method="rmvpe",
     f0_min=50,
@@ -199,20 +184,22 @@ def rvc_edgetts_infer(
     index_rate=0,
     volume_envelope=1,
     autopitch=False,
-    autopitch_threshold=155.0,
+    autopitch_model_type="baritone",
     autotune=False,
     autotune_tonic="C",
     autotune_scale="chromatic",
     autotune_strength=1.0,
+    autotune_retune_speed=0.0,
+    autotune_flex_tune=0.0,
+    autotune_preserve_vibrato=0.0,
+    autotune_humanize=0.0,
     stereo_sound=False,
     output_format="wav",
-    # EdgeTTS
     tts_voice=None,
     tts_text=None,
     tts_rate=0,
     tts_volume=0,
     tts_pitch=0,
-    # FlashSR
     audio_upscaling=False,
     progress=gr.Progress(track_tqdm=True),
 ):
@@ -236,11 +223,15 @@ def rvc_edgetts_infer(
         index_rate=index_rate,
         volume_envelope=volume_envelope,
         autopitch=autopitch,
-        autopitch_threshold=autopitch_threshold,
+        autopitch_model_type=autopitch_model_type,
         autotune=autotune,
         autotune_tonic=autotune_tonic,
         autotune_scale=autotune_scale,
         autotune_strength=autotune_strength,
+        autotune_retune_speed=autotune_retune_speed,
+        autotune_flex_tune=autotune_flex_tune,
+        autotune_preserve_vibrato=autotune_preserve_vibrato,
+        autotune_humanize=autotune_humanize,
         audio_upscaling=audio_upscaling,
         stereo_sound=stereo_sound,
         output_format=output_format,

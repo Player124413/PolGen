@@ -5,17 +5,22 @@ from rvc.lib.pitch.autopitch import (
     VoiceType,
     ModelVoiceType,
     calculate_pitch_shift,
-    calc_pitch_shift,  # deprecated, для обратной совместимости
     get_autopitch,
+)
+
+from rvc.lib.pitch.autotune import (
+    AutoTune,
+    AutoTuneConfig,
 )
 
 __all__ = [
     "AutoPitch",
-    "AutoPitchResult", 
+    "AutoPitchResult",
     "VoiceAnalysis",
     "VoiceType",
     "ModelVoiceType",
     "calculate_pitch_shift",
-    "calc_pitch_shift",
     "get_autopitch",
+    "AutoTune",
+    "AutoTuneConfig",
 ]
