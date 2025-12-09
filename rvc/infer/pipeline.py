@@ -8,7 +8,8 @@ import torch.nn.functional as F
 from scipy import signal
 from tqdm import tqdm
 
-from rvc.lib.predictors.f0 import CREPE, FCPE, RMVPE, AutoTune, calc_pitch_shift
+from rvc.lib.predictors.f0 import CREPE, FCPE, RMVPE, AutoTune
+from rvc.lib.pitch import calculate_pitch_shift
 
 # Фильтр Баттерворта для высоких частот
 bh, ah = signal.butter(N=5, Wn=48, btype="high", fs=16000)
@@ -92,7 +93,8 @@ class VC:
 
         # АвтоПитч (автоматическое определение высоты тона)
         if autopitch is True:
-            pitch += calc_pitch_shift(f0, autopitch_threshold, 12)
+            model_type = "male" if autopitch_threshold < 200 else "female"
+            pitch += calculate_pitch_shift(f0, model_type=model_type)
 
         # АвтоТюн (коррекция высоты тона)
         if autotune is True:
