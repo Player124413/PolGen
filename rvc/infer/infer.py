@@ -4,7 +4,6 @@ import os
 
 import edge_tts
 import gradio as gr
-import numpy as np
 import torch
 
 from rvc.infer.config import Config
@@ -13,6 +12,7 @@ from rvc.lib.algorithm.synthesizers import Synthesizer
 from rvc.lib.fairseq import load_model
 from rvc.lib.my_utils import load_audio, save_audio
 from rvc.modules.audio_upscaler import upscale
+from rvc.modules.model_calibration import calibrate_model, load_voice_info, ModelVoiceInfo
 
 RVC_MODELS_DIR = os.path.join(os.getcwd(), "models", "RVC_models")
 OUTPUT_DIR = os.path.join(os.getcwd(), "output", "RVC_output")
@@ -41,7 +41,7 @@ def load_rvc_model(rvc_model):
     if not rvc_model_path:
         raise FileNotFoundError(f"Модель {rvc_model} не содержит .pth файла!")
 
-    return rvc_model_path, rvc_index_path
+    return model_dir, rvc_model_path, rvc_index_path
 
 
 def load_hubert(model_path):
@@ -80,6 +80,29 @@ async def text_to_speech(voice, text, rate, volume, pitch, output_path):
     await communicate.save(output_path)
 
 
+def get_model_voice_info(model_dir: str, model_path: str, index_path: str, autopitch: bool) -> float:
+    """Получает или калибрует информацию о голосе модели."""
+    if not autopitch:
+        return 0.0
+    
+    # Пробуем загрузить существующую калибровку
+    voice_info = load_voice_info(model_dir)
+    
+    if voice_info is not None and voice_info.calibrated:
+        print(f"[✓] Голос модели: {voice_info.f0_center:.1f} Hz ({voice_info.voice_type})")
+        return voice_info.f0_center
+    
+    # Калибруем модель
+    voice_info = calibrate_model(
+        model_dir=model_dir,
+        rvc_model_path=model_path,
+        index_path=index_path,
+        device=config.device,
+    )
+    
+    return voice_info.f0_center
+
+
 def rvc_infer(
     rvc_model=None,
     input_path=None,
@@ -91,7 +114,6 @@ def rvc_infer(
     index_rate=0,
     volume_envelope=1,
     autopitch=False,
-    autopitch_model_type="baritone",
     autotune=False,
     autotune_tonic="C",
     autotune_scale="chromatic",
@@ -115,8 +137,12 @@ def rvc_infer(
     display_progress(0.1, "Загружаем модель HuBERT...", False)
     hubert_model = load_hubert(HUBERT_BASE_PATH)
 
-    display_progress(0.2, f"Загружаем модель '{rvc_model}'...", False)
-    model_path, index_path = load_rvc_model(rvc_model)
+    display_progress(0.15, f"Загружаем модель '{rvc_model}'...", False)
+    model_dir, model_path, index_path = load_rvc_model(rvc_model)
+
+    # Получаем калибровку модели (если autopitch включён)
+    display_progress(0.2, "Проверяем калибровку модели...", False)
+    model_f0_center = get_model_voice_info(model_dir, model_path, index_path, autopitch)
 
     display_progress(0.3, "Получаем конвертер голоса...", False)
     cpt, version, net_g, tgt_sr, vc, use_f0 = get_vc(model_path)
@@ -147,7 +173,7 @@ def rvc_infer(
         version=version,
         protect=protect,
         autopitch=autopitch,
-        autopitch_model_type=autopitch_model_type,
+        model_f0_center=model_f0_center,
         autotune=autotune,
         autotune_tonic=autotune_tonic,
         autotune_scale=autotune_scale,
@@ -184,7 +210,6 @@ def rvc_edgetts_infer(
     index_rate=0,
     volume_envelope=1,
     autopitch=False,
-    autopitch_model_type="baritone",
     autotune=False,
     autotune_tonic="C",
     autotune_scale="chromatic",
@@ -223,7 +248,6 @@ def rvc_edgetts_infer(
         index_rate=index_rate,
         volume_envelope=volume_envelope,
         autopitch=autopitch,
-        autopitch_model_type=autopitch_model_type,
         autotune=autotune,
         autotune_tonic=autotune_tonic,
         autotune_scale=autotune_scale,

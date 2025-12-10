@@ -24,28 +24,12 @@ class VoiceType(Enum):
         self.f0_max = f0_max
 
     def contains(self, f0: float) -> bool:
-        """Проверяет, попадает ли F0 в диапазон этого типа голоса."""
         return self.f0_min <= f0 <= self.f0_max
 
     def distance_to(self, f0: float) -> float:
-        """Расстояние от F0 до центра диапазона в полутонах."""
         if f0 <= 0:
             return float("inf")
         return abs(12 * np.log2(f0 / self.f0_center))
-
-
-class ModelVoiceType(Enum):
-    """Типы голосов для RVC моделей с целевыми частотами."""
-
-    BASS = ("bass", 110.0)
-    BARITONE = ("baritone", 145.0)
-    TENOR = ("tenor", 175.0)
-    ALTO = ("alto", 230.0)
-    SOPRANO = ("soprano", 320.0)
-
-    def __init__(self, label: str, target_f0: float):
-        self.label = label
-        self.target_f0 = target_f0
 
 
 @dataclass
@@ -71,21 +55,23 @@ class VoiceAnalysis:
 class AutoPitchResult:
     """Результат работы AutoPitch."""
 
-    pitch_shift: float  # Точное значение сдвига в полутонах
-    input_analysis: VoiceAnalysis
-    target_f0: float
+    pitch_shift: float
+    input_center: float
+    target_center: float
     reasoning: str
 
 
 class AutoPitch:
     """
     Улучшенный AutoPitch для автоматического определения сдвига высоты тона.
+    
+    Использует калибровку модели для точного определения целевой частоты.
     """
 
     MIN_VOICED_RATIO = 0.1
     MIN_STABLE_FRAMES = 3
     OUTLIER_IQR_FACTOR = 1.5
-    MAX_SHIFT_SEMITONES = 24.0  # Максимум ±2 октавы
+    MAX_SHIFT_SEMITONES = 24.0
 
     def __init__(self):
         pass
@@ -123,8 +109,8 @@ class AutoPitch:
         f0_median = float(np.median(f0_filtered))
         f0_mean = float(np.mean(f0_filtered))
         f0_std = float(np.std(f0_filtered))
-        f0_min = float(np.min(f0_filtered))
-        f0_max = float(np.max(f0_filtered))
+        f0_min_val = float(np.min(f0_filtered))
+        f0_max_val = float(np.max(f0_filtered))
         f0_p10 = float(np.percentile(f0_filtered, 10))
         f0_p90 = float(np.percentile(f0_filtered, 90))
         f0_weighted = self._compute_weighted_median(f0, voiced_mask)
@@ -135,8 +121,8 @@ class AutoPitch:
             f0_weighted_median=f0_weighted,
             f0_mean=f0_mean,
             f0_std=f0_std,
-            f0_min=f0_min,
-            f0_max=f0_max,
+            f0_min=f0_min_val,
+            f0_max=f0_max_val,
             f0_percentile_10=f0_p10,
             f0_percentile_90=f0_p90,
             detected_type=detected_type,
@@ -147,7 +133,6 @@ class AutoPitch:
         )
 
     def _remove_outliers_iqr(self, data: np.ndarray) -> np.ndarray:
-        """Удаляет выбросы методом межквартильного размаха (IQR)."""
         q1 = np.percentile(data, 25)
         q3 = np.percentile(data, 75)
         iqr = q3 - q1
@@ -156,7 +141,6 @@ class AutoPitch:
         return data[(data >= lower_bound) & (data <= upper_bound)]
 
     def _compute_weighted_median(self, f0: np.ndarray, voiced_mask: np.ndarray) -> float:
-        """Вычисляет взвешенную медиану F0, где вес = длительность стабильного участка."""
         if not np.any(voiced_mask):
             return 0.0
 
@@ -203,7 +187,6 @@ class AutoPitch:
         return float(sorted_values[min(median_idx, len(sorted_values) - 1)])
 
     def _detect_voice_type(self, f0_filtered: np.ndarray, f0_weighted: float) -> Tuple[VoiceType, float]:
-        """Определяет тип голоса по распределению F0."""
         center_f0 = f0_weighted if f0_weighted > 0 else np.median(f0_filtered)
         best_type = VoiceType.BARITONE
         min_distance = float("inf")
@@ -226,17 +209,22 @@ class AutoPitch:
     def calculate_pitch_shift(
         self,
         f0: np.ndarray,
-        model_type: ModelVoiceType,
-        custom_target_f0: Optional[float] = None,
+        model_f0_center: float,
     ) -> AutoPitchResult:
-        """Вычисляет оптимальный сдвиг высоты тона."""
+        """
+        Вычисляет оптимальный сдвиг высоты тона.
+        
+        Args:
+            f0: Массив F0 входного аудио
+            model_f0_center: Центральная частота голоса модели (из калибровки)
+        """
         analysis = self.analyze_f0(f0)
 
         if analysis.voiced_ratio < self.MIN_VOICED_RATIO:
             return AutoPitchResult(
                 pitch_shift=0.0,
-                input_analysis=analysis,
-                target_f0=0.0,
+                input_center=0.0,
+                target_center=model_f0_center,
                 reasoning=f"Недостаточно озвученных фреймов ({analysis.voiced_ratio:.1%})",
             )
 
@@ -247,31 +235,25 @@ class AutoPitch:
         if input_center <= 0:
             return AutoPitchResult(
                 pitch_shift=0.0,
-                input_analysis=analysis,
-                target_f0=0.0,
+                input_center=0.0,
+                target_center=model_f0_center,
                 reasoning="Не удалось определить центральную частоту входа",
             )
 
-        # Определяем целевую частоту
-        if custom_target_f0 is not None and custom_target_f0 > 0:
-            target_f0 = custom_target_f0
-            reasoning_target = f"цель {target_f0:.1f} Hz"
-        else:
-            target_f0 = model_type.target_f0
-            reasoning_target = f"{model_type.label} ({target_f0:.1f} Hz)"
-
-        # Вычисляем точный сдвиг без округления
-        pitch_shift = 12.0 * np.log2(target_f0 / input_center)
-        
-        # Ограничиваем только экстремальные значения
+        # Вычисляем точный сдвиг
+        pitch_shift = 12.0 * np.log2(model_f0_center / input_center)
         pitch_shift = float(np.clip(pitch_shift, -self.MAX_SHIFT_SEMITONES, self.MAX_SHIFT_SEMITONES))
 
-        reasoning = f"Вход: {analysis.detected_type.label} ({input_center:.1f} Hz) → {reasoning_target}, сдвиг: {pitch_shift:+.2f}"
+        reasoning = (
+            f"Вход: {input_center:.1f} Hz ({analysis.detected_type.label}) → "
+            f"Модель: {model_f0_center:.1f} Hz → "
+            f"Сдвиг: {pitch_shift:+.2f}"
+        )
 
         return AutoPitchResult(
             pitch_shift=pitch_shift,
-            input_analysis=analysis,
-            target_f0=target_f0,
+            input_center=input_center,
+            target_center=model_f0_center,
             reasoning=reasoning,
         )
 
@@ -280,39 +262,23 @@ _autopitch_instance: Optional[AutoPitch] = None
 
 
 def get_autopitch() -> AutoPitch:
-    """Возвращает глобальный экземпляр AutoPitch."""
     global _autopitch_instance
     if _autopitch_instance is None:
         _autopitch_instance = AutoPitch()
     return _autopitch_instance
 
 
-def calculate_pitch_shift(
-    f0: np.ndarray,
-    model_type: str = "baritone",
-    custom_target_f0: Optional[float] = None,
-) -> float:
+def calculate_pitch_shift(f0: np.ndarray, model_f0_center: float) -> float:
     """
     Вычисляет сдвиг высоты тона.
 
     Args:
         f0: Массив значений F0 (Hz)
-        model_type: "bass", "baritone", "tenor", "alto", "soprano"
-        custom_target_f0: Пользовательская целевая частота (Hz)
+        model_f0_center: Центральная частота голоса модели
 
     Returns:
         Сдвиг в полутонах (float)
     """
     autopitch = get_autopitch()
-
-    type_map = {
-        "bass": ModelVoiceType.BASS,
-        "baritone": ModelVoiceType.BARITONE,
-        "tenor": ModelVoiceType.TENOR,
-        "alto": ModelVoiceType.ALTO,
-        "soprano": ModelVoiceType.SOPRANO,
-    }
-    model_type_enum = type_map.get(model_type.lower(), ModelVoiceType.BARITONE)
-
-    result = autopitch.calculate_pitch_shift(f0, model_type_enum, custom_target_f0)
+    result = autopitch.calculate_pitch_shift(f0, model_f0_center)
     return result.pitch_shift

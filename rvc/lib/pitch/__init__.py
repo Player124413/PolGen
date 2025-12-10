@@ -3,7 +3,6 @@ from rvc.lib.pitch.autopitch import (
     AutoPitchResult,
     VoiceAnalysis,
     VoiceType,
-    ModelVoiceType,
     calculate_pitch_shift,
     get_autopitch,
 )
@@ -18,7 +17,6 @@ __all__ = [
     "AutoPitchResult",
     "VoiceAnalysis",
     "VoiceType",
-    "ModelVoiceType",
     "calculate_pitch_shift",
     "get_autopitch",
     "AutoTune",

@@ -14,16 +14,6 @@ from tabs.components.modules import (
 from tabs.components.settings import settings
 
 
-# Типы голосов для AutoPitch
-VOICE_TYPES = [
-    ("Бас (низкий мужской)", "bass"),
-    ("Баритон (средний мужской)", "baritone"),
-    ("Тенор (высокий мужской)", "tenor"),
-    ("Альт (низкий женский)", "alto"),
-    ("Сопрано (высокий женский)", "soprano"),
-]
-
-
 def inference_tab():
     with gr.Row():
         with gr.Column(scale=1, variant="panel"):
@@ -43,16 +33,10 @@ def inference_tab():
             with gr.Group():
                 autopitch = gr.Checkbox(
                     value=False,
-                    label="Автоматическое определение высоты тона",
+                    label="AutoPitch",
+                    info="Автоматическое определение высоты тона (при первом запуске модель калибруется ~5 сек)",
                     interactive=True,
                     visible=True,
-                )
-                autopitch_model_type = gr.Dropdown(
-                    value="baritone",
-                    label="Тип голоса модели",
-                    choices=VOICE_TYPES,
-                    interactive=True,
-                    visible=False,
                 )
                 rvc_pitch = gr.Slider(
                     minimum=-24,
@@ -122,7 +106,6 @@ def inference_tab():
                     visible=True,
                 )
 
-    # Компонент настроек
     (
         f0_method,
         index_rate,
@@ -142,26 +125,22 @@ def inference_tab():
         f0_max,
     ) = settings()
 
-    # Загрузка файлов
     local_file.input(process_file_upload, inputs=[local_file], outputs=[song_input, local_file])
 
-    # Обновление кнопок
     show_upload_button.click(swap_visibility, outputs=[upload_file, enter_local_file, song_input, local_file])
     show_enter_button.click(swap_visibility, outputs=[enter_local_file, upload_file, song_input, local_file])
     show_upload_button.click(swap_buttons, outputs=[show_upload_button, show_enter_button])
     show_enter_button.click(swap_buttons, outputs=[show_enter_button, show_upload_button])
 
-    # Показать/скрыть тип голоса модели при включении autopitch
+    # Показать/скрыть ручной pitch при включении autopitch
     autopitch.change(
-        lambda x: (gr.update(visible=x), gr.update(visible=not x)),
+        lambda x: gr.update(visible=not x),
         inputs=autopitch,
-        outputs=[autopitch_model_type, rvc_pitch],
+        outputs=rvc_pitch,
     )
 
-    # Обновление списка моделей
     ref_btn.click(update_models_list, None, outputs=rvc_model)
 
-    # Запуск процесса преобразования
     generate_btn.click(
         rvc_infer,
         inputs=[
@@ -175,7 +154,6 @@ def inference_tab():
             index_rate,
             volume_envelope,
             autopitch,
-            autopitch_model_type,
             autotune,
             autotune_tonic,
             autotune_scale,
@@ -227,16 +205,10 @@ def edge_tts_tab():
                 with gr.Group():
                     autopitch = gr.Checkbox(
                         value=False,
-                        label="Автоматическое определение высоты тона",
+                        label="AutoPitch",
+                        info="Автоматическое определение высоты тона",
                         interactive=True,
                         visible=True,
-                    )
-                    autopitch_model_type = gr.Dropdown(
-                        value="baritone",
-                        label="Тип голоса модели",
-                        choices=VOICE_TYPES,
-                        interactive=True,
-                        visible=False,
                     )
                     rvc_pitch = gr.Slider(
                         minimum=-24,
@@ -275,7 +247,6 @@ def edge_tts_tab():
                     step=1,
                     value=0,
                     label="Громкость речи",
-                    info="Громкость синтеза речи",
                     interactive=True,
                     visible=True,
                 )
@@ -285,7 +256,6 @@ def edge_tts_tab():
                     step=1,
                     value=0,
                     label="Скорость речи",
-                    info="Скорость синтеза речи",
                     interactive=True,
                     visible=True,
                 )
@@ -318,7 +288,6 @@ def edge_tts_tab():
                     visible=True,
                 )
 
-    # Компонент настроек
     (
         f0_method,
         index_rate,
@@ -338,20 +307,16 @@ def edge_tts_tab():
         f0_max,
     ) = settings()
 
-    # Обновление списка TTS-голосов
     language.change(update_edge_voices, inputs=language, outputs=tts_voice)
 
-    # Показать/скрыть тип голоса модели при включении autopitch
     autopitch.change(
-        lambda x: (gr.update(visible=x), gr.update(visible=not x)),
+        lambda x: gr.update(visible=not x),
         inputs=autopitch,
-        outputs=[autopitch_model_type, rvc_pitch],
+        outputs=rvc_pitch,
     )
 
-    # Обновление списка моделей
     ref_btn.click(update_models_list, None, outputs=rvc_model)
 
-    # Запуск процесса преобразования
     generate_btn.click(
         rvc_edgetts_infer,
         inputs=[
@@ -364,7 +329,6 @@ def edge_tts_tab():
             index_rate,
             volume_envelope,
             autopitch,
-            autopitch_model_type,
             autotune,
             autotune_tonic,
             autotune_scale,

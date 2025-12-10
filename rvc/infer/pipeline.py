@@ -36,7 +36,6 @@ class AudioProcessor:
 
 class VC:
     def __init__(self, tgt_sr, config):
-        """Инициализация параметров для преобразования голоса."""
         self.x_pad = config.x_pad
         self.x_query = config.x_query
         self.x_center = config.x_center
@@ -61,7 +60,7 @@ class VC:
         f0_max,
         f0_method,
         autopitch,
-        autopitch_model_type,
+        model_f0_center,
         autotune,
         autotune_tonic,
         autotune_scale,
@@ -92,9 +91,9 @@ class VC:
         if f0 is None:
             raise ValueError("Метод F0 не распознан или не смог рассчитать F0.")
 
-        # AutoPitch
-        if autopitch:
-            pitch += calculate_pitch_shift(f0, model_type=autopitch_model_type)
+        # AutoPitch — используем калиброванную частоту модели
+        if autopitch and model_f0_center > 0:
+            pitch += calculate_pitch_shift(f0, model_f0_center)
             print(str(pitch))
 
         # AutoTune
@@ -134,7 +133,6 @@ class VC:
         version,
         protect,
     ):
-        """Преобразует аудио с использованием модели."""
         feats = torch.from_numpy(audio0).float()
         if feats.dim() == 2:
             feats = feats.mean(-1)
@@ -213,7 +211,7 @@ class VC:
         version,
         protect,
         autopitch,
-        autopitch_model_type,
+        model_f0_center,
         autotune,
         autotune_tonic,
         autotune_scale,
@@ -264,7 +262,7 @@ class VC:
                 f0_max,
                 f0_method,
                 autopitch,
-                autopitch_model_type,
+                model_f0_center,
                 autotune,
                 autotune_tonic,
                 autotune_scale,
