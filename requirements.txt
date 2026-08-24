@@ -2,7 +2,7 @@
 gradio==5.35.0
 
 # Основные ML-фреймворки
-numpy==1.26.4
+numpy>=1.26.4
 # torch
 # torchaudio
 # torchvision
