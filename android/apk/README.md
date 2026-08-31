@@ -89,7 +89,7 @@ smali/…/MainActivity.smali          — вся логика (UI, PackageInstal
 smali/…/MainActivity$ProgressReceiver.smali — приёмник прогресса из Termux
 res/mipmap-*/         — иконки всех плотностей
 assets/               — сюда CI кладёт termux.apk (встроенный Termux)
-apktool.yml           — параметры сборки (minSdk 24 / targetSdk 29, versionCode 3)
+apktool.yml           — параметры сборки (minSdk 24 / targetSdk 29, versionCode 4)
 build.sh              — скрипт сборки
 sign.py               — подпись v1+v2 на чистом Python (cryptography)
 polgen-launcher-key.pem — ключ подписи (для будущих версий)

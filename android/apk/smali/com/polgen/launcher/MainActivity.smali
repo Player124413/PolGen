@@ -169,12 +169,12 @@
     const/16 v3, 0x21             # 33
     if-lt v2, v3, :old_register
     const/4 v2, 0x2                # RECEIVER_EXPORTED
-    invoke-virtual {p0, v11, v10, v2}, Landroid/content/Context;->registerReceiver(Landroid/content/BroadcastReceiver;Landroid/content/IntentFilter;I)I
-    move-result v2
+    invoke-virtual {p0, v11, v10, v2}, Landroid/content/Context;->registerReceiver(Landroid/content/BroadcastReceiver;Landroid/content/IntentFilter;I)Landroid/content/Intent;
+    move-result-object v2
     goto :register_done
     :old_register
-    invoke-virtual {p0, v11, v10}, Landroid/content/Context;->registerReceiver(Landroid/content/BroadcastReceiver;Landroid/content/IntentFilter;)I
-    move-result v2
+    invoke-virtual {p0, v11, v10}, Landroid/content/Context;->registerReceiver(Landroid/content/BroadcastReceiver;Landroid/content/IntentFilter;)Landroid/content/Intent;
+    move-result-object v2
     :register_done
 
     return-void
