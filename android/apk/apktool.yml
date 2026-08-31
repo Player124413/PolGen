@@ -1,0 +1,15 @@
+brutAndBrut: false
+apkFileName: PolGen-launcher.apk
+isFrameworkApk: false
+usesFramework:
+  ids: [1]
+sdkInfo:
+  minSdkVersion: '24'
+  targetSdkVersion: '29'
+packageInfo:
+  renameManifestPackage: null
+  forcedPackageId: '127'
+versionInfo:
+  versionCode: '1'
+  versionName: '1.0'
+compressionType: false

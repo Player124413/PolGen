@@ -26,6 +26,14 @@
 
 ## 🚀 Установка
 
+### Вариант 1 — APK-лаунчер (проще всего)
+
+Установи [`apk/PolGen-launcher.apk`](apk/PolGen-launcher.apk) — приложение
+с кнопками: оно само поставит Termux при необходимости и запустит полностью
+автоматическую установку PolGen. Подробности: [`apk/README.md`](apk/README.md).
+
+### Вариант 2 — вручную через Termux
+
 1. **Установите Termux** — только с [F-Droid](https://f-droid.org/packages/com.termux/)
    или из [GitHub Releases](https://github.com/termux/termux-app/releases)
    (версия из Google Play устарела и не работает).

@@ -95,6 +95,12 @@ PolGen работает **напрямую на телефоне** — без ro
 > Рекомендуется 6+ ГБ RAM (на 4 ГБ — треки до ~1–2 минут). Конвертация идёт
 > на CPU: ~2–4 минуты на минуту аудио.
 
+**Самый простой способ** — APK-лаунчер (`android/apk/PolGen-launcher.apk`):
+устанавливаешь как обычное приложение, жмёшь одну кнопку — Termux, Python,
+PyTorch, FFmpeg и модели скачиваются и устанавливаются автоматически.
+
+Либо классически, из Termux:
+
 ```bash
 pkg install git
 git clone https://github.com/Politrees/PolGen.git ~/PolGen

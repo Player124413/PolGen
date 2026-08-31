@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.polgen.launcher">
+
+    <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="29"/>
+
+    <!-- Право запускать команды в Termux (Intent RUN_COMMAND) -->
+    <uses-permission android:name="com.termux.permission.RUN_COMMAND"/>
+
+    <application
+        android:label="PolGen"
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="true"
+        android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
+
+        <activity android:name=".MainActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity>
+
+    </application>
+
+</manifest>
