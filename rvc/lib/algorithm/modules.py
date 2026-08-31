@@ -42,7 +42,7 @@ class WaveNet(torch.nn.Module):
 
         # Conditional layer for global conditioning
         if gin_channels:
-            self.cond_layer = torch.nn.utils.parametrizations.weight_norm(
+            self.cond_layer = rvc.lib.torch_compat.weight_norm(
                 torch.nn.Conv1d(gin_channels, 2 * hidden_channels * n_layers, 1),
                 name="weight",
             )
@@ -54,7 +54,7 @@ class WaveNet(torch.nn.Module):
         # Initialize layers
         for i in range(n_layers):
             self.in_layers.append(
-                torch.nn.utils.parametrizations.weight_norm(
+                rvc.lib.torch_compat.weight_norm(
                     torch.nn.Conv1d(
                         hidden_channels,
                         2 * hidden_channels,
@@ -68,7 +68,7 @@ class WaveNet(torch.nn.Module):
 
             res_skip_channels = hidden_channels if i == n_layers - 1 else 2 * hidden_channels
             self.res_skip_layers.append(
-                torch.nn.utils.parametrizations.weight_norm(
+                rvc.lib.torch_compat.weight_norm(
                     torch.nn.Conv1d(hidden_channels, res_skip_channels, 1),
                     name="weight",
                 ),

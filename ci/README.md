@@ -5,39 +5,28 @@ GitHub Actions читает workflows **только** из `.github/workflows/`
 Поэтому готовые workflows лежат здесь, в `ci/`, и активируются одним
 копированием.
 
-## 📱 `build-launcher-apk.yml` — APK-лаунчер со встроенным Termux
+## 📱 `standalone-apk.yml` — автономный APK (без Termux)
 
-Собирает версию лаунчера, в которую **встроен официальный Termux APK**
-(universal — все 64-битные устройства): приложение ставится на чистый
-телефон, Termux устанавливается из самого лаунчера (системное окно
-подтверждения), затем одной кнопкой запускается установка PolGen — и весь
-процесс (git, Python, PyTorch, FFmpeg, модели) отображается **живым
-журналом прямо в приложении**.
+Собирает APK, внутри которого **всё ядро PolGen**: Python 3.8, PyTorch
+1.8.1 (arm64), scipy, edge-tts и веб-интерфейс. Termux не нужен вообще.
+Результат выкладывается **артефактом** (релизы не создаются).
 
 ### Как включить (один раз, 30 секунд)
 
-1. Открой [build-launcher-apk.yml](build-launcher-apk.yml) на GitHub и
-   скопируй его содержимое (кнопка «Copy raw contents»).
-2. В репозитории: **Add file → Create new file**.
-3. Имя файла: `.github/workflows/build-launcher-apk.yml`
-4. Вставь содержимое → **Commit changes**.
-5. Готово. Сборка запускается:
-   - вручную: **Actions → Android APK launcher (Termux bundled) → Run workflow**;
-   - автоматически при пуше тега `v*` (APK прикрепится к Release).
+1. Открой [standalone-apk.yml](standalone-apk.yml) на GitHub и скопируй
+   его содержимое (кнопка «Copy raw contents»).
+2. В репозитории: **Add file → Create new file** → имя
+   `.github/workflows/standalone-apk.yml` → вставь → **Commit**.
+3. Вкладка **Actions** → «PolGen standalone APK» → **Run workflow** →
+   выбери ветку → Run.
+4. Через ~10 минут: страница запуска → **Artifacts** →
+   `PolGen-standalone-apk` → скачай zip, внутри `PolGen-standalone.apk`.
 
-### Что получается
+APK подписан тем же ключом, что и предыдущие версии лаунчера, поэтому
+ставится поверх без удаления.
 
-| Артефакт | Описание |
-|----------|----------|
-| `PolGen-launcher-full.apk` | Лаунчер + встроенный Termux (~55–95 МБ), готов к установке |
-| Подпись | Та же, что у локальной сборки (`android/apk/polgen-launcher-key.pem`) — обновления встают поверх без удаления |
+### Старый workflow
 
-### Почему Termux не встроен в APK в самом репозитории
-
-Termux APK — бинарник ~90 МБ, распространяется по GPL; к тому же его
-нужно обновлять. CI скачивает свежий официальный релиз Termux при каждой
-сборке и вкладывает в лаунчер — в git хранится только исходник (~70 КБ).
-
-Локальная сборка (без Termux внутри) — `android/apk/build.sh`: кнопка
-«Установить Termux» в этом случае просто открывает F-Droid, всё
-остальное работает одинаково.
+Если в `.github/workflows/main.yml` остался прежний лаунчер со встроенным
+Termux — его можно удалить (он больше не собирается: `android/apk/`
+удалён вместе с Termux-частью).

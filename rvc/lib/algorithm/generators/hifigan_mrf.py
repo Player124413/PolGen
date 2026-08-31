@@ -1,9 +1,12 @@
+# -*- coding: utf-8 -*-
+from __future__ import annotations
+
 import math
 
 import numpy as np
 import torch
 from torch.nn.utils import remove_weight_norm
-from torch.nn.utils.parametrizations import weight_norm
+from rvc.lib.torch_compat import weight_norm
 from torch.utils.checkpoint import checkpoint
 
 LRELU_SLOPE = 0.1
@@ -259,7 +262,7 @@ class HiFiGANMRFGenerator(torch.nn.Module):
 
         stride_f0s = [math.prod(upsample_rates[i + 1 :]) if i + 1 < len(upsample_rates) else 1 for i in range(len(upsample_rates))]
 
-        for i, (u, k) in enumerate(zip(upsample_rates, upsample_kernel_sizes, strict=False)):
+        for i, (u, k) in enumerate(zip(upsample_rates, upsample_kernel_sizes)):
             # handling odd upsampling rates
             if u % 2 == 0:
                 # old method
@@ -300,7 +303,7 @@ class HiFiGANMRFGenerator(torch.nn.Module):
                 torch.nn.ModuleList(
                     [
                         MRFBlock(channel, kernel_size=k, dilations=d)
-                        for k, d in zip(resblock_kernel_sizes, resblock_dilations, strict=False)
+                        for k, d in zip(resblock_kernel_sizes, resblock_dilations)
                     ],
                 ),
             )
@@ -317,7 +320,7 @@ class HiFiGANMRFGenerator(torch.nn.Module):
         if g is not None:
             x = x + self.cond(g)
 
-        for ups, mrf, noise_conv in zip(self.upsamples, self.mrfs, self.noise_convs, strict=False):
+        for ups, mrf, noise_conv in zip(self.upsamples, self.mrfs, self.noise_convs):
             x = torch.nn.functional.leaky_relu(x, LRELU_SLOPE)
 
             if self.training and self.checkpointing:

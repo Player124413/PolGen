@@ -1,3 +1,6 @@
+# -*- coding: utf-8 -*-
+from __future__ import annotations
+
 #!/usr/bin/env python3
 """Лёгкий веб-интерфейс PolGen для Android (Termux).
 
@@ -23,18 +26,27 @@ import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, unquote, urlparse
 
-# Корень репозитория (пути в rvc.infer.infer считаются от него)
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# Каталоги. При запуске из репозитория (ПК/Termux) данные лежат в корне
+# репозитория; в автономном APK (Chaquopy) код хранится внутри APK, а данные —
+# в каталоге приложения, который передаётся через POLGEN_DATA_DIR.
+HERE = os.path.dirname(os.path.abspath(__file__))
+if os.environ.get("POLGEN_DATA_DIR"):
+    ROOT = os.environ["POLGEN_DATA_DIR"]
+    sys.path.insert(0, HERE)
+    STATIC_DIR = os.path.join(HERE, "static")
+else:
+    ROOT = os.path.dirname(HERE)
+    sys.path.insert(0, ROOT)
+    STATIC_DIR = os.path.join(ROOT, "android", "static")
+os.makedirs(ROOT, exist_ok=True)
 os.chdir(ROOT)
-sys.path.insert(0, ROOT)
 
 HOST = os.environ.get("POLGEN_HOST", "127.0.0.1")
 PORT = int(os.environ.get("POLGEN_PORT", "4000"))
-STATIC_DIR = os.path.join(ROOT, "android", "static")
 UPLOAD_DIR = os.path.join(ROOT, "output", "uploads")
 OUTPUT_DIR = os.path.join(ROOT, "output", "RVC_output")
 MODELS_DIR = os.path.join(ROOT, "models", "RVC_models")
-MUSIC_DIR = os.path.join(os.path.expanduser("~"), "storage", "music", "PolGen")
+MUSIC_DIR = os.environ.get("POLGEN_MUSIC_DIR", os.path.join(os.path.expanduser("~"), "storage", "music", "PolGen"))
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)

@@ -86,30 +86,20 @@ PolGen предоставляет гибкость в выборе моделе�
 
 ## 📱 Запуск на Android
 
-PolGen работает **напрямую на телефоне** — без root, облака и ПК: сервер
-крутится в [Termux](https://f-droid.org/packages/com.termux/), интерфейс
-открывается в браузере как обычное приложение. Поддерживаются все
-64-битные устройства (arm64-v8a / x86_64), Android 7+.
+PolGen работает **напрямую на телефоне** — без root, облака и ПК.
+Автономный APK содержит всё ядро внутри (Python + PyTorch + веб-интерфейс),
+**Termux больше не нужен**. Поддерживаются 64-битные устройства
+(arm64-v8a), Android 7+.
 
 > [!TIP]
 > Рекомендуется 6+ ГБ RAM (на 4 ГБ — треки до ~1–2 минут). Конвертация идёт
-> на CPU: ~2–4 минуты на минуту аудио.
+> на CPU: ~2–4 минуты на минуту аудио. Первый запуск докачивает модели
+> (~560 МБ).
 
-**Самый простой способ** — APK-лаунчер (`android/apk/PolGen-launcher.apk`):
-устанавливаешь как обычное приложение, жмёшь одну кнопку — Termux, Python,
-PyTorch, FFmpeg и модели скачиваются и устанавливаются автоматически.
-
-Либо классически, из Termux:
-
-```bash
-pkg install git
-git clone https://github.com/Politrees/PolGen.git ~/PolGen
-cd ~/PolGen
-bash android/install.sh   # установка зависимостей и моделей
-bash android/run.sh       # запуск, браузер откроется сам
-```
-
-Подробности: [`android/README.md`](android/README.md).
+**Установка:** собери APK в CI (Actions → «PolGen standalone APK» →
+Run workflow → Artifacts) и поставь как обычное приложение — интерфейс
+поднимется сам. Подробности: [`android/README.md`](android/README.md)
+и [`ci/README.md`](ci/README.md).
 
 
 ---

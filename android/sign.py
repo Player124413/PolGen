@@ -40,7 +40,8 @@ SIG_ALGO_RSA_PKCS1_SHA256 = 0x0103
 CHUNK_SIZE = 1048576
 MAGIC = b"APK Sig Block 42"
 
-# файлы, которые в APK хранятся без сжатия и с выравниванием
+# resources.arsc всегда без сжатия; .so и прочие STORED-записи gradle
+# уже кладёт несжатыми — их метод сохраняется автоматически
 STORED_ENTRIES = {"resources.arsc"}
 
 
@@ -227,16 +228,24 @@ def main():
     key, cert = load_or_create_key(key_path)
 
     with zipfile.ZipFile(src) as zin:
-        files = [(i.filename, zin.read(i.filename)) for i in zin.infolist() if not i.is_dir()]
+        infos = [i for i in zin.infolist() if not i.is_dir()]
+        files = [(i.filename, zin.read(i.filename)) for i in infos]
+        methods = {i.filename: i.compress_type for i in infos}
 
     # v1: дайджесты всех файлов, кроме META-INF
     meta = build_v1_meta(files, key, cert)
 
-    # итоговый список записей (v1-файлы в конце)
+    # итоговый список записей (v1-файлы в конце).
+    # Метод сжатия СОХРАНЯЕТСЯ как в исходном APK: нативные библиотеки
+    # (.so) и resources.arsc gradle кладёт несжатыми (для mmap при
+    # extractNativeLibs=false) — пережатие сломало бы установку.
+    # Все несжатые записи выравниваются по 16 байт.
     entries = []
     for name, data in files:
         if name in STORED_ENTRIES:
-            entries.append((name, data, 0, 4))       # STORED + выравнивание 4 байта
+            entries.append((name, data, 0, 16))
+        elif methods.get(name, zipfile.ZIP_DEFLATED) == zipfile.ZIP_STORED:
+            entries.append((name, data, 0, 16))
         else:
             entries.append((name, data, 8, 0))
     for name, data in meta.items():
@@ -262,7 +271,7 @@ def main():
     print(f"Подписано: {dst}")
     print(f"  v1 (JAR, SHA-256): {len(files)} файлов")
     print(f"  v2 (APK Signature Scheme v2, RSA-2048/SHA-256): блок {len(block)} байт")
-    print(f"  resources.arsc: STORED, выровнен по 4 байта")
+    print(f"  STORED-записей (выровнены по 16): {sum(1 for e in entries if e[2] == 0)}")
 
 
 if __name__ == "__main__":

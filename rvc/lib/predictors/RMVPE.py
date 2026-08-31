@@ -1,6 +1,24 @@
+# -*- coding: utf-8 -*-
+from __future__ import annotations
+
 import numpy as np
 import torch
-from scipy.signal import medfilt
+try:
+    from scipy.signal import medfilt
+except Exception:  # noqa: BLE001 — scipy недоступен/старая сборка
+    import numpy as _np
+
+    def medfilt(x, kernel_size=3):
+        """Одномерная медианная фильтрация на чистом numpy (совместимо с 1.19).
+
+        Как и scipy.signal.medfilt, границы дополняются нулями."""
+        x = _np.asarray(x)
+        half = kernel_size // 2
+        padded = _np.pad(x.astype(_np.float64), half, mode="constant")
+        windows = _np.stack(
+            [padded[i : i + kernel_size] for i in range(x.shape[0])]
+        )
+        return _np.median(windows, axis=1).astype(x.dtype)
 
 from rvc.lib.audio_compat import mel_filterbank
 

@@ -10,6 +10,155 @@ def _find_ffmpeg():
     return shutil.which("ffmpeg")
 
 
+# ─── Android: декодирование через MediaCodec (без ffmpeg) ─────────────
+
+def _on_android():
+    """True, если работаем внутри APK (Chaquopy) — там есть мост в Java."""
+    try:
+        import java  # noqa: F401  — модуль Chaquopy
+
+        return True
+    except ImportError:
+        return False
+
+
+def _decode_android_pcm(file):
+    """Декодирует аудио (mp3/m4a/aac/ogg/flac/wav) через системные
+    кодеки Android. Возвращает (pcm_float32_mono, sample_rate).
+
+    Работает только под Chaquopy (python внутри APK)."""
+    from java import jclass, jarray, jbyte, jint
+
+    MediaExtractor = jclass("android.media.MediaExtractor")
+    MediaCodec = jclass("android.media.MediaCodec")
+    MediaFormat = jclass("android.media.MediaFormat")
+
+    extractor = MediaExtractor()
+    try:
+        extractor.setDataSource(file)
+        mime = None
+        track_format = None
+        for i in range(extractor.getTrackCount()):
+            fmt = extractor.getTrackFormat(i)
+            m = fmt.getString(MediaFormat.KEY_MIME)
+            if m is not None and m.startsWith("audio/"):
+                extractor.selectTrack(i)
+                mime, track_format = m, fmt
+                break
+        if mime is None:
+            raise RuntimeError("аудиодорожка не найдена")
+
+        codec = MediaCodec.createDecoderByType(mime)
+        try:
+            codec.configure(track_format, None, None, 0)
+            codec.start()
+
+            info = MediaCodec.BufferInfo()
+            chunks = []
+            out_rate = track_format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+            channels = track_format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+
+            input_done = False
+            output_done = False
+            while not output_done:
+                if not input_done:
+                    idx = codec.dequeueInputBuffer(jint(10000))
+                    if idx >= 0:
+                        buf = codec.getInputBuffer(idx)
+                        n = extractor.readSampleData(buf, 0)
+                        if n < 0:
+                            codec.queueInputBuffer(
+                                idx, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM
+                            )
+                            input_done = True
+                        else:
+                            codec.queueInputBuffer(idx, 0, n, extractor.getSampleTime(), 0)
+                            extractor.advance()
+
+                idx = codec.dequeueOutputBuffer(info, jint(10000))
+                if idx >= 0:
+                    size = info.size
+                    if size > 0:
+                        buf = codec.getOutputBuffer(idx)
+                        buf.position(info.offset)
+                        # копируем ByteBuffer → java byte[] → bytes (прямой memory-copy)
+                        jarr = jarray(jbyte)(size)
+                        buf.get(jarr, 0, size)
+                        chunks.append(bytes(jarr))
+                    codec.releaseOutputBuffer(idx, False)
+                elif idx == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED:
+                    new_fmt = codec.getOutputFormat()
+                    out_rate = new_fmt.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+                    channels = new_fmt.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+
+            pcm = np.frombuffer(b"".join(chunks), dtype=np.int16)
+            if channels > 1:
+                pcm = pcm.reshape(-1, channels).mean(axis=1)
+            audio = pcm.astype(np.float32) / 32768.0
+            return audio, out_rate
+        finally:
+            try:
+                codec.stop()
+            except Exception:  # noqa: BLE001
+                pass
+            codec.release()
+    finally:
+        extractor.release()
+
+
+def _resample_linear(audio, src_rate, dst_rate):
+    """Простая линейная передискретизация (для голоса более чем достаточно)."""
+    if src_rate == dst_rate or len(audio) == 0:
+        return audio
+    n = int(len(audio) * dst_rate / src_rate)
+    x_src = np.linspace(0.0, 1.0, len(audio), endpoint=False)
+    x_dst = np.linspace(0.0, 1.0, n, endpoint=False)
+    return np.interp(x_dst, x_src, audio).astype(np.float32)
+
+
+def _load_audio_android(file, sample_rate):
+    """Путь загрузки внутри APK: MediaCodec + numpy-ресемпл."""
+    audio, rate = _decode_android_pcm(file)
+    return _resample_linear(audio, rate, sample_rate)
+
+
+def _load_audio_wave(file, sample_rate):
+    """WAV через стандартную библиотеку (последний резерв)."""
+    import wave
+
+    with wave.open(file, "rb") as w:
+        rate = w.getframerate()
+        channels = w.getnchannels()
+        width = w.getsampwidth()
+        raw = w.readframes(w.getnframes())
+    if width == 2:
+        pcm = np.frombuffer(raw, dtype="<i2").astype(np.float32) / 32768.0
+    elif width == 4:
+        pcm = np.frombuffer(raw, dtype="<i4").astype(np.float32) / 2147483648.0
+    else:
+        raise RuntimeError(f"неподдерживаемая разрядность WAV: {width * 8} бит")
+    if channels > 1:
+        pcm = pcm.reshape(-1, channels).mean(axis=1)
+    return _resample_linear(pcm, rate, sample_rate)
+
+
+def _save_audio_wave(audio_data, sample_rate, output_path, stereo=False):
+    """Запись 16-битного WAV стандартной библиотекой (без ffmpeg)."""
+    import wave
+
+    audio = np.clip(audio_data, -1.0, 1.0)
+    pcm = (audio * 32767).astype("<i2")
+    channels = 2 if stereo else 1
+    if stereo:
+        pcm = np.repeat(pcm.reshape(-1, 1), 2, axis=1).reshape(-1)
+    with wave.open(output_path, "wb") as w:
+        w.setnchannels(channels)
+        w.setsampwidth(2)
+        w.setframerate(sample_rate)
+        w.writeframes(pcm.tobytes())
+    return output_path
+
+
 def _load_audio_ffmpeg(file: str, sample_rate: int) -> np.ndarray:
     """Декодирует аудио любого формата через ffmpeg-пайп (моно, f32le, нужная SR).
 
@@ -61,13 +210,33 @@ def load_audio(file, sample_rate):
                 # ffmpeg не смог декодировать — пробуем резервный путь
                 pass
 
+        # Внутри APK (Chaquopy): системные кодеки Android
+        if _on_android():
+            try:
+                return _load_audio_android(file, sample_rate)
+            except Exception:
+                # если системный декодер не справился — ниже пробуем WAV напрямую
+                pass
+
+        # WAV умеет читать стандартная библиотека
+        if file.lower().endswith((".wav", ".wave")):
+            return _load_audio_wave(file, sample_rate)
+
         return _load_audio_soundfile(file, sample_rate)
     except Exception as error:
         raise RuntimeError(f"Произошла ошибка при загрузке аудио: {error}") from error
 
 
 def save_audio(audio_data, sample_rate, output_path, output_format="wav", stereo=False):
-    """Сохраняет аудио используя прямой вызов FFmpeg через pipe."""
+    """Сохраняет аудио используя прямой вызов FFmpeg через pipe.
+
+    Без ffmpeg (автономный APK) — WAV стандартной библиотекой; если
+    запрошен другой формат, файл сохраняется как .wav."""
+    if _find_ffmpeg() is None:
+        if not output_path.lower().endswith(".wav"):
+            output_path = os.path.splitext(output_path)[0] + ".wav"
+        return _save_audio_wave(audio_data, sample_rate, output_path, stereo)
+
     # Конвертируем в int16 или float32 в зависимости от формата
     if output_format in ["wav", "flac"]:
         # Для lossless форматов используем 24-bit

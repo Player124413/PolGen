@@ -18,7 +18,7 @@ def get_version() -> str:
         with open(VERSION_FILE, encoding="utf-8") as f:
             version = f.read().strip()
             # Удаляем префикс 'v' если есть
-            version = version.removeprefix("v")
+            version = version[1:] if version.startswith("v") else version
             return version
     except FileNotFoundError:
         return "unknown"

@@ -1,3 +1,6 @@
+# -*- coding: utf-8 -*-
+from __future__ import annotations
+
 import math
 
 import numpy as np
@@ -5,7 +8,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 from torch.nn.utils import remove_weight_norm
-from torch.nn.utils.parametrizations import weight_norm
+from rvc.lib.torch_compat import weight_norm
 from torch.utils.checkpoint import checkpoint
 
 from rvc.lib.algorithm.commons import get_padding, init_weights
@@ -72,7 +75,7 @@ class ResBlock(nn.Module):
         self.convs2.apply(init_weights)
 
     def forward(self, x: torch.Tensor):
-        for c1, c2 in zip(self.convs1, self.convs2, strict=False):
+        for c1, c2 in zip(self.convs1, self.convs2):
             xt = F.leaky_relu(x, self.leaky_relu_slope)
             xt = c1(xt)
             xt = F.leaky_relu(xt, self.leaky_relu_slope)
@@ -82,7 +85,7 @@ class ResBlock(nn.Module):
         return x
 
     def remove_weight_norm(self):
-        for c1, c2 in zip(self.convs1, self.convs2, strict=False):
+        for c1, c2 in zip(self.convs1, self.convs2):
             remove_weight_norm(c1)
             remove_weight_norm(c2)
 

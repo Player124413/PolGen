@@ -2,7 +2,7 @@ import math
 
 import torch
 from torch.nn.utils import remove_weight_norm
-from torch.nn.utils.parametrizations import weight_norm
+from rvc.lib.torch_compat import weight_norm
 from torch.utils.checkpoint import checkpoint
 
 from rvc.lib.algorithm.commons import init_weights
@@ -97,7 +97,7 @@ class HiFiGANNSFGenerator(torch.nn.Module):
         channels = [upsample_initial_channel // (2 ** (i + 1)) for i in range(len(upsample_rates))]
         stride_f0s = [math.prod(upsample_rates[i + 1 :]) if i + 1 < len(upsample_rates) else 1 for i in range(len(upsample_rates))]
 
-        for i, (u, k) in enumerate(zip(upsample_rates, upsample_kernel_sizes, strict=False)):
+        for i, (u, k) in enumerate(zip(upsample_rates, upsample_kernel_sizes)):
             # handling odd upsampling rates
             if u % 2 == 0:
                 # old method
@@ -136,7 +136,7 @@ class HiFiGANNSFGenerator(torch.nn.Module):
             [
                 ResBlock(channels[i], k, d)
                 for i in range(len(self.ups))
-                for k, d in zip(resblock_kernel_sizes, resblock_dilation_sizes, strict=False)
+                for k, d in zip(resblock_kernel_sizes, resblock_dilation_sizes)
             ],
         )
 
@@ -158,7 +158,7 @@ class HiFiGANNSFGenerator(torch.nn.Module):
         if g is not None:
             x = x + self.cond(g)
 
-        for i, (ups, noise_convs) in enumerate(zip(self.ups, self.noise_convs, strict=False)):
+        for i, (ups, noise_convs) in enumerate(zip(self.ups, self.noise_convs)):
             x = torch.nn.functional.leaky_relu(x, self.lrelu_slope)
             # Apply upsampling layer
             if self.training and self.checkpointing:
@@ -191,10 +191,10 @@ class HiFiGANNSFGenerator(torch.nn.Module):
     def __prepare_scriptable__(self):
         for l in self.ups:
             for hook in l._forward_pre_hooks.values():
-                if hook.__module__ == "torch.nn.utils.parametrizations.weight_norm" and hook.__class__.__name__ == "WeightNorm":
+                if hook.__module__ == "rvc.lib.torch_compat.weight_norm" and hook.__class__.__name__ == "WeightNorm":
                     remove_weight_norm(l)
         for l in self.resblocks:
             for hook in l._forward_pre_hooks.values():
-                if hook.__module__ == "torch.nn.utils.parametrizations.weight_norm" and hook.__class__.__name__ == "WeightNorm":
+                if hook.__module__ == "rvc.lib.torch_compat.weight_norm" and hook.__class__.__name__ == "WeightNorm":
                     remove_weight_norm(l)
         return self

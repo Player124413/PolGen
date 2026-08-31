@@ -179,7 +179,7 @@ def _build_voice_entry(model_path: str):
 
     # Удаляем ненужный слой
     del net_g.enc_q
-    net_g.load_state_dict(cpt["weight"], strict=False)
+    net_g.load_state_dict(cpt["weight"])
     net_g = net_g.to(config.device).float().eval()
 
     # Чекпойнт больше не нужен — освобождаем сразу (раньше жил до конца конвертации)

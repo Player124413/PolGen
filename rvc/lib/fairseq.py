@@ -38,7 +38,7 @@ def load_model(filename):
         state = torch.load(filename, map_location="cpu", weights_only=False)
 
     model = HubertModel(HubertConfig(**state["cfg"]["model"]), num_classes=int(state["model"]["label_embs_concat"].shape[0]))
-    model.load_state_dict(state["model"], strict=False)
+    model.load_state_dict(state["model"])
 
     return model
 
@@ -718,7 +718,7 @@ def make_conv_pos(e, k, g):
     dropout = 0
     nn.init.normal_(pos_conv.weight, mean=0, std=math.sqrt((4 * (1.0 - dropout)) / (k * e)))
     nn.init.constant_(pos_conv.bias, 0)
-    return nn.Sequential(nn.utils.parametrizations.weight_norm(pos_conv, name="weight", dim=2), SamePad(k), nn.GELU())
+    return nn.Sequential(rvc.lib.torch_compat.weight_norm(pos_conv, name="weight", dim=2), SamePad(k), nn.GELU())
 
 
 def is_xla_tensor(tensor):

@@ -5,7 +5,10 @@ import os
 import numpy as np
 import torch
 import torch.nn.functional as F
-from scipy import signal
+try:
+    from scipy import signal
+except Exception:  # noqa: BLE001 — scipy недоступен/старая сборка
+    signal = None
 
 # malloc_trim: возврат освобождённых страниц кучи ОС (glibc). На Android/bionic
 # функции нет — остаётся None, и вызов просто пропускается.
@@ -23,8 +26,11 @@ try:
 except Exception:  # noqa: BLE001 - среда без librosa (Android/TermUX и т.п.)
     _librosa_rms = None
 
-# Фильтр Баттерворта для высоких частот
-bh, ah = signal.butter(N=5, Wn=48, btype="high", fs=16000)
+# Фильтр Баттерворта для высоких частот (если scipy недоступен — без фильтра)
+if signal is not None:
+    bh, ah = signal.butter(N=5, Wn=48, btype="high", fs=16000)
+else:
+    bh = ah = None
 
 
 # Класс для обработки аудио
@@ -241,7 +247,8 @@ class VC:
                 index = big_npy = None
 
         opt_ts = []
-        audio = signal.filtfilt(bh, ah, audio)
+        if bh is not None:
+            audio = signal.filtfilt(bh, ah, audio)
         audio_pad = np.pad(audio, (self.window // 2, self.window // 2), mode="reflect")
 
         if audio_pad.shape[0] > self.t_max:

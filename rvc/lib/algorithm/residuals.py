@@ -1,8 +1,11 @@
+# -*- coding: utf-8 -*-
+from __future__ import annotations
+
 from itertools import chain
 
 import torch
 from torch.nn.utils import remove_weight_norm
-from torch.nn.utils.parametrizations import weight_norm
+from rvc.lib.torch_compat import weight_norm
 
 from rvc.lib.algorithm.commons import get_padding, init_weights
 from rvc.lib.algorithm.modules import WaveNet
@@ -59,7 +62,7 @@ class ResBlock(torch.nn.Module):
         return layers
 
     def forward(self, x: torch.Tensor, x_mask: torch.Tensor = None):
-        for conv1, conv2 in zip(self.convs1, self.convs2, strict=False):
+        for conv1, conv2 in zip(self.convs1, self.convs2):
             x_residual = x
             x = torch.nn.functional.leaky_relu(x, LRELU_SLOPE)
             x = apply_mask(x, x_mask)
@@ -158,7 +161,7 @@ class ResidualCouplingBlock(torch.nn.Module):
     def __prepare_scriptable__(self):
         for i in range(self.n_flows):
             for hook in self.flows[i * 2]._forward_pre_hooks.values():
-                if hook.__module__ == "torch.nn.utils.parametrizations.weight_norm" and hook.__class__.__name__ == "WeightNorm":
+                if hook.__module__ == "rvc.lib.torch_compat.weight_norm" and hook.__class__.__name__ == "WeightNorm":
                     torch.nn.utils.remove_weight_norm(self.flows[i * 2])
 
         return self

@@ -1,0 +1,5 @@
+build/
+.gradle/
+local.properties
+app/src/main/python/polgen/
+__pycache__/

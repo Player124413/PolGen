@@ -1,0 +1,55 @@
+// Модуль приложения PolGen: python-ядро RVC внутри APK (Chaquopy).
+//
+// Ключевое: torch 1.8.1 — последняя сборка PyTorch для Android из репозитория
+// Chaquopy (https://chaquo.com/pypi-13.1/torch/). Она требует Python 3.8.
+plugins {
+    id "com.android.application"
+    id "com.chaquo.python"
+}
+
+android {
+    namespace "com.polgen.app"
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.polgen.launcher"   // тот же id: обновляется поверх старого лаунчера
+        minSdk 24
+        targetSdk 34
+        versionCode 6
+        versionName "2.0"
+
+        ndk {
+            // PyTorch для Android существует только для 64-битных ARM.
+            abiFilters += ["arm64-v8a"]
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            // Подпись накладывается после сборки: android/sign.py (v1+v2)
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}
+
+chaquopy {
+    defaultConfig {
+        version = "3.8"   // единственная версия с torch для Android
+
+        pip {
+            // Нативные пакеты — из репозитория Chaquopy, чистый Python — с PyPI.
+            install("torch==1.8.1")   // ~32 МБ (arm64)
+            install("scipy==1.4.1")   // medfilt, butter/filtfilt
+            install("edge-tts")       // синтез речи (тянет aiohttp из репозитория Chaquopy)
+            install("requests")
+            install("tqdm")
+            install("omegaconf")
+            install("gdown")
+        }
+    }
+}

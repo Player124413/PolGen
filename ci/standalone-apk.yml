@@ -1,0 +1,76 @@
+# Сборка автономного APK PolGen — БЕЗ Termux.
+#
+# ⚠️ Этот файл лежит в ci/, потому что у бота нет права менять .github/workflows/.
+# Чтобы включить сборку, скопируй его туда:
+#   1. Открой этот файл на GitHub → Copy raw contents
+#   2. GitHub → Add file → Create new file → имя: .github/workflows/standalone-apk.yml
+#   3. Вставь содержимое → Commit
+#   4. Вкладка Actions → «PolGen standalone APK» → Run workflow → выбери ветку.
+#
+# Что делает workflow:
+#   - подготавливает python-код (rvc, веб-интерфейс) и вкладывает его в APK;
+#   - ставит зависимости: torch 1.8.1 (arm64), scipy, edge-tts и др. —
+#     всё это упаковывается ВНУТРЬ APK, Termux больше не нужен;
+#   - собирает и подписывает APK (v1+v2, тот же ключ, что и раньше);
+#   - результат — артефакт PolGen-standalone.apk (Actions → данный запуск →
+#     Artifacts). Релизы НЕ создаются.
+#
+# Первый запуск на телефоне докачает модели (~560 МБ) сам.
+
+name: PolGen standalone APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Python (для chaquopy и подписи)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Android SDK (platform 34)
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0" > /dev/null
+
+      - name: Подготовка python-кода PolGen
+        run: bash android/app/stage_python.sh
+
+      - name: Сборка APK (release, без подписи)
+        working-directory: android/app
+        run: gradle --no-daemon :app:assembleRelease
+
+      - name: Подпись APK (v1+v2)
+        run: |
+          pip install cryptography
+          UNSIGNED=$(ls android/app/app/build/outputs/apk/release/*unsigned*.apk)
+          echo "Подписываю: $UNSIGNED"
+          python android/sign.py "$UNSIGNED" PolGen-standalone.apk android/polgen-launcher-key.pem
+
+      - name: Загрузка артефакта
+        uses: actions/upload-artifact@v4
+        with:
+          name: PolGen-standalone-apk
+          path: PolGen-standalone.apk
+          retention-days: 90

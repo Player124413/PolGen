@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 from torch.nn.utils import remove_weight_norm
-from torch.nn.utils.parametrizations import weight_norm
+from rvc.lib.torch_compat import weight_norm
 
 from rvc.lib.algorithm.commons import init_weights
 from rvc.lib.algorithm.residuals import LRELU_SLOPE, ResBlock
@@ -43,7 +43,7 @@ class HiFiGANGenerator(torch.nn.Module):
         self.ups = torch.nn.ModuleList()
         self.resblocks = torch.nn.ModuleList()
 
-        for i, (u, k) in enumerate(zip(upsample_rates, upsample_kernel_sizes, strict=False)):
+        for i, (u, k) in enumerate(zip(upsample_rates, upsample_kernel_sizes)):
             self.ups.append(
                 weight_norm(
                     torch.nn.ConvTranspose1d(
@@ -56,7 +56,7 @@ class HiFiGANGenerator(torch.nn.Module):
                 ),
             )
             ch = upsample_initial_channel // (2 ** (i + 1))
-            for _, (k, d) in enumerate(zip(resblock_kernel_sizes, resblock_dilation_sizes, strict=False)):
+            for _, (k, d) in enumerate(zip(resblock_kernel_sizes, resblock_dilation_sizes)):
                 self.resblocks.append(ResBlock(ch, k, d))
 
         self.conv_post = torch.nn.Conv1d(ch, 1, 7, 1, padding=3, bias=False)
@@ -93,7 +93,7 @@ class HiFiGANGenerator(torch.nn.Module):
     def __prepare_scriptable__(self):
         for l in self.ups_and_resblocks:
             for hook in l._forward_pre_hooks.values():
-                if hook.__module__ == "torch.nn.utils.parametrizations.weight_norm" and hook.__class__.__name__ == "WeightNorm":
+                if hook.__module__ == "rvc.lib.torch_compat.weight_norm" and hook.__class__.__name__ == "WeightNorm":
                     torch.nn.utils.remove_weight_norm(l)
         return self
 

@@ -26,16 +26,13 @@ def dl_model(link, model_name, dir_name):
     r.raise_for_status()
 
     total_size = int(r.headers.get("content-length", 0))
-    with (
-        open(file_path, "wb") as f,
-        tqdm(
-            desc=f"Установка {model_name}",
-            total=total_size,
-            unit="iB",
-            unit_scale=True,
-            unit_divisor=1024,
-        ) as pbar,
-    ):
+    with open(file_path, "wb") as f, tqdm(
+        desc=f"Установка {model_name}",
+        total=total_size,
+        unit="iB",
+        unit_scale=True,
+        unit_divisor=1024,
+    ) as pbar:
         for chunk in r.iter_content(chunk_size=8192):
             f.write(chunk)
             pbar.update(len(chunk))
