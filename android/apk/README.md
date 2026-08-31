@@ -66,7 +66,7 @@ F-Droid, дальше всё так же.
 Android SDK — только JRE и Python:
 
 ```bash
-bash build.sh        # apktool (smali→dex, ресурсы) + sign.py (подпись v1)
+bash build.sh        # apktool (smali→dex, ресурсы) + sign.py (подпись v1+v2)
 ```
 
 Чтобы собрать версию со встроенным Termux локально, положи
@@ -77,8 +77,8 @@ bash build.sh        # apktool (smali→dex, ресурсы) + sign.py (подп
 > [!IMPORTANT]
 > `polgen-launcher-key.pem` — ключ подписи. Храни его: все обновления APK
 > должны подписываться им же, иначе Android потребует удалить старую версию.
-> Для публикации в Google Play понадобится v2-подпись и targetSdk 34
-> (сейчас: v1 + targetSdk 29 для прямой установки).
+> Подпись: v1 + v2 (APK Signature Scheme v2) — v2 обязательна для установки
+> на Android 11+ / MIUI / HyperOS; targetSdk 29 (прямая установка).
 
 ## 📁 Файлы
 
@@ -89,8 +89,8 @@ smali/…/MainActivity.smali          — вся логика (UI, PackageInstal
 smali/…/MainActivity$ProgressReceiver.smali — приёмник прогресса из Termux
 res/mipmap-*/         — иконки всех плотностей
 assets/               — сюда CI кладёт termux.apk (встроенный Termux)
-apktool.yml           — параметры сборки (minSdk 24 / targetSdk 29, versionCode 2)
+apktool.yml           — параметры сборки (minSdk 24 / targetSdk 29, versionCode 3)
 build.sh              — скрипт сборки
-sign.py               — v1-подпись на чистом Python (cryptography)
+sign.py               — подпись v1+v2 на чистом Python (cryptography)
 polgen-launcher-key.pem — ключ подписи (для будущих версий)
 ```
