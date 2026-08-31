@@ -36,6 +36,13 @@
 
     invoke-super {p0, p1}, Landroid/app/Activity;->onCreate(Landroid/os/Bundle;)V
 
+    # глобальный перехватчик аварий: покажет причину сбоев на экране и сохранит в crash.txt
+    new-instance v10, Lcom/polgen/launcher/MainActivity$CrashHandler;
+    invoke-static {}, Ljava/lang/Thread;->getDefaultUncaughtExceptionHandler()Ljava/lang/Thread$UncaughtExceptionHandler;
+    move-result-object v9
+    invoke-direct {v10, p0, v9}, Lcom/polgen/launcher/MainActivity$CrashHandler;-><init>(Lcom/polgen/launcher/MainActivity;Ljava/lang/Thread$UncaughtExceptionHandler;)V
+    invoke-static {v10}, Ljava/lang/Thread;->setDefaultUncaughtExceptionHandler(Ljava/lang/Thread$UncaughtExceptionHandler;)V
+
     # корневой LinearLayout (тёмный)
     new-instance v1, Landroid/widget/LinearLayout;
     invoke-direct {v1, p0}, Landroid/widget/LinearLayout;-><init>(Landroid/content/Context;)V
@@ -550,7 +557,7 @@
     move-result v0
     if-nez v0, :do_install
     :try_end_0
-    .catch Ljava/lang/Exception; {:try_start_0 .. :try_end_0} :catch_perm
+    .catch Ljava/lang/Throwable; {:try_start_0 .. :try_end_0} :catch_perm
 
     # нет права — открыть настройки
     :try_start_1
@@ -562,7 +569,7 @@
     invoke-direct {v0, v1, v2}, Landroid/content/Intent;-><init>(Ljava/lang/String;Landroid/net/Uri;)V
     invoke-virtual {p0, v0}, Landroid/app/Activity;->startActivity(Landroid/content/Intent;)V
     :try_end_1
-    .catch Ljava/lang/Exception; {:try_start_1 .. :try_end_1} :catch_settings
+    .catch Ljava/lang/Throwable; {:try_start_1 .. :try_end_1} :catch_settings
 
     goto :after_settings
 
@@ -577,89 +584,19 @@
     :catch_perm
     nop
 
-    # собственно установка через PackageInstaller
+    # установка в фоновом потоке: копирование ~117 МБ нельзя делать в UI-потоке,
+    # иначе интерфейс замирает и прошивка убивает приложение
     :do_install
-    const/4 v0, 0x0                # InputStream in = null
+    const-string v0, "__START__ Установка Termux: копирую встроенный файл (~117 МБ), это займёт до минуты\u2026"
+    invoke-direct {p0, v0}, Lcom/polgen/launcher/MainActivity;->appendLog(Ljava/lang/String;)V
 
-    :try_start_2
-    invoke-virtual {p0}, Landroid/content/Context;->getAssets()Landroid/content/res/AssetManager;
-    move-result-object v1
-    const-string v2, "termux.apk"
-    invoke-virtual {v1, v2}, Landroid/content/res/AssetManager;->open(Ljava/lang/String;)Ljava/io/InputStream;
-    move-result-object v0
+    new-instance v0, Lcom/polgen/launcher/MainActivity$InstallRunnable;
+    invoke-direct {v0, p0}, Lcom/polgen/launcher/MainActivity$InstallRunnable;-><init>(Lcom/polgen/launcher/MainActivity;)V
 
-    invoke-virtual {p0}, Landroid/app/Activity;->getPackageManager()Landroid/content/pm/PackageManager;
-    move-result-object v1
-    invoke-virtual {v1}, Landroid/content/pm/PackageManager;->getPackageInstaller()Landroid/content/pm/PackageInstaller;
-    move-result-object v1
+    new-instance v1, Ljava/lang/Thread;
+    invoke-direct {v1, v0}, Ljava/lang/Thread;-><init>(Ljava/lang/Runnable;)V
+    invoke-virtual {v1}, Ljava/lang/Thread;->start()V
 
-    new-instance v2, Landroid/content/pm/PackageInstaller$SessionParams;
-    const/4 v3, 0x1                # MODE_FULL_INSTALL
-    invoke-direct {v2, v3}, Landroid/content/pm/PackageInstaller$SessionParams;-><init>(I)V
-    invoke-virtual {v1, v2}, Landroid/content/pm/PackageInstaller;->createSession(Landroid/content/pm/PackageInstaller$SessionParams;)I
-    move-result v2
-    invoke-virtual {v1, v2}, Landroid/content/pm/PackageInstaller;->openSession(I)Landroid/content/pm/PackageInstaller$Session;
-    move-result-object v2
-
-    const-string v3, "termux.apk"
-    const-wide/16 v4, 0x0
-    const-wide/16 v6, -0x1
-    invoke-virtual/range {v2 .. v7}, Landroid/content/pm/PackageInstaller$Session;->openWrite(Ljava/lang/String;JJ)Ljava/io/OutputStream;
-    move-result-object v3
-
-    # копирование 64 КБ кусками
-    const v4, 0x10000
-    new-array v4, v4, [B
-
-    :copy_loop
-    invoke-virtual {v0, v4}, Ljava/io/InputStream;->read([B)I
-    move-result v5
-    if-lez v5, :copy_done
-    const/4 v6, 0x0
-    invoke-virtual {v3, v4, v6, v5}, Ljava/io/OutputStream;->write([BII)V
-    goto :copy_loop
-
-    :copy_done
-    invoke-virtual {v3}, Ljava/io/OutputStream;->flush()V
-    invoke-virtual {v3}, Ljava/io/OutputStream;->close()V
-    invoke-virtual {v0}, Ljava/io/InputStream;->close()V
-
-    # commit с PendingIntent на статус
-    new-instance v4, Landroid/content/Intent;
-    const-string v5, "com.polgen.launcher.INSTALL_STATUS"
-    invoke-direct {v4, v5}, Landroid/content/Intent;-><init>(Ljava/lang/String;)V
-    const/4 v5, 0x2
-    const v6, 0xa000000               # FLAG_UPDATE_CURRENT | FLAG_MUTABLE
-    invoke-static {p0, v5, v4, v6}, Landroid/app/PendingIntent;->getBroadcast(Landroid/content/Context;ILandroid/content/Intent;I)Landroid/app/PendingIntent;
-    move-result-object v4
-    invoke-virtual {v4}, Landroid/app/PendingIntent;->getIntentSender()Landroid/content/IntentSender;
-    move-result-object v4
-    invoke-virtual {v2, v4}, Landroid/content/pm/PackageInstaller$Session;->commit(Landroid/content/IntentSender;)V
-
-    const-string v4, "⏳ Termux: подтверди установку в появившемся системном окне…"
-    invoke-direct {p0, v4}, Lcom/polgen/launcher/MainActivity;->appendLog(Ljava/lang/String;)V
-    :try_end_2
-    .catch Ljava/lang/Exception; {:try_start_2 .. :try_end_2} :catch_install
-
-    return-void
-
-    :catch_install
-    move-exception v4
-    invoke-virtual {v4}, Ljava/lang/Object;->toString()Ljava/lang/String;
-    move-result-object v5
-    const-string v6, "❌ Ошибка установки Termux: "
-    invoke-virtual {v6, v5}, Ljava/lang/String;->concat(Ljava/lang/String;)Ljava/lang/String;
-    move-result-object v5
-    invoke-direct {p0, v5}, Lcom/polgen/launcher/MainActivity;->appendLog(Ljava/lang/String;)V
-
-    :try_start_3
-    if-eqz v0, :skip_close
-    invoke-virtual {v0}, Ljava/io/InputStream;->close()V
-    :skip_close
-    :try_end_3
-    .catch Ljava/lang/Exception; {:try_start_3 .. :try_end_3} :catch_close
-
-    :catch_close
     return-void
 .end method
 
@@ -870,7 +807,7 @@
     const-string v0, "Команда скопирована — открой Termux и вставь (долгое нажатие → Вставить)"
     invoke-direct {p0, v0}, Lcom/polgen/launcher/MainActivity;->toast(Ljava/lang/String;)V
     :try_end_0
-    .catch Ljava/lang/Exception; {:try_start_0 .. :try_end_0} :catch_0
+    .catch Ljava/lang/Throwable; {:try_start_0 .. :try_end_0} :catch_0
 
     return-void
 

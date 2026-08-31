@@ -1,0 +1,52 @@
+.class public Lcom/polgen/launcher/MainActivity$LogRunnable;
+.super Ljava/lang/Object;
+.source "MainActivity.java"
+
+# interfaces
+.implements Ljava/lang/Runnable;
+
+
+# annotations
+.annotation system Ldalvik/annotation/EnclosingClass;
+    value = Lcom/polgen/launcher/MainActivity;
+.end annotation
+
+.annotation system Ldalvik/annotation/InnerClass;
+    accessFlags = 0x1
+    name = "LogRunnable"
+.end annotation
+
+
+# instance fields
+.field private final activity:Lcom/polgen/launcher/MainActivity;
+.field private final line:Ljava/lang/String;
+
+
+# direct methods
+.method public constructor <init>(Lcom/polgen/launcher/MainActivity;Ljava/lang/String;)V
+    .locals 0
+
+    invoke-direct {p0}, Ljava/lang/Object;-><init>()V
+
+    iput-object p1, p0, Lcom/polgen/launcher/MainActivity$LogRunnable;->activity:Lcom/polgen/launcher/MainActivity;
+    iput-object p2, p0, Lcom/polgen/launcher/MainActivity$LogRunnable;->line:Ljava/lang/String;
+
+    return-void
+.end method
+
+
+# virtual methods
+.method public run()V
+    .locals 2
+
+    iget-object v0, p0, Lcom/polgen/launcher/MainActivity$LogRunnable;->activity:Lcom/polgen/launcher/MainActivity;
+    if-eqz v0, :done
+
+    iget-object v1, p0, Lcom/polgen/launcher/MainActivity$LogRunnable;->line:Ljava/lang/String;
+    if-eqz v1, :done
+
+    invoke-virtual {v0, v1}, Lcom/polgen/launcher/MainActivity;->appendLog(Ljava/lang/String;)V
+
+    :done
+    return-void
+.end method
