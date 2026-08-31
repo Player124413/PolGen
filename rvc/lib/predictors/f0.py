@@ -1,11 +1,20 @@
 import os
+import threading
 
 import numpy as np
 import torch
-import torchcrepe
-from torchfcpe import spawn_bundled_infer_model
 
 from rvc.lib.predictors.RMVPE import RMVPEF0Predictor
+
+try:
+    import torchcrepe
+except Exception:  # noqa: BLE001 - torchcrepe недоступен (Android/TermUX и т.п.)
+    torchcrepe = None
+
+try:
+    from torchfcpe import spawn_bundled_infer_model
+except Exception:  # noqa: BLE001 - torchfcpe недоступен (Android/TermUX и т.п.)
+    spawn_bundled_infer_model = None
 
 
 def median_interp_pitch(f0):
@@ -157,6 +166,8 @@ class RMVPE:
 
 class CREPE:
     def __init__(self, device, sample_rate=16000, hop_size=160):
+        if torchcrepe is None:
+            raise RuntimeError("Метод CREPE недоступен: пакет torchcrepe не установлен. Используйте RMVPE.")
         self.device = device
         self.sample_rate = sample_rate
         self.hop_size = hop_size
@@ -191,6 +202,8 @@ class CREPE:
 
 class FCPE:
     def __init__(self, device, sample_rate=16000, hop_size=160):
+        if spawn_bundled_infer_model is None:
+            raise RuntimeError("Метод FCPE недоступен: пакет torchfcpe не установлен. Используйте RMVPE.")
         self.device = device
         self.sample_rate = sample_rate
         self.hop_size = hop_size
@@ -225,3 +238,47 @@ class FCPE:
         )
 
         return f0
+
+
+def available_f0_methods() -> list:
+    """Возвращает список доступных методов извлечения F0."""
+    methods = ["rmvpe", "rmvpe+"]
+    if torchcrepe is not None:
+        methods += ["crepe", "crepe-tiny"]
+    if spawn_bundled_infer_model is not None:
+        methods.append("fcpe")
+    return methods
+
+
+# ─── Кэш F0-предикторов ────────────────────────────────────────────────
+# RMVPE и FCPE загружают веса с диска при создании. Кэширование экземпляров
+# убирает повторные загрузки (RMVPE — это ~180-360 МБ на каждую конвертацию).
+_F0_CACHE: dict = {}
+_F0_LOCK = threading.Lock()
+
+
+def get_cached_f0_predictor(method: str, device, sample_rate: int = 16000, hop_size: int = 160):
+    """Возвращает кэшированный F0-предиктор для выбранного метода."""
+    family = "rmvpe" if method.startswith("rmvpe") else "fcpe" if method == "fcpe" else None
+    if family is None:
+        return None  # CREPE управляет своими весами самостоятельно
+
+    key = (family, str(device), sample_rate)
+    with _F0_LOCK:
+        if key in _F0_CACHE:
+            return _F0_CACHE[key]
+
+    if family == "rmvpe":
+        predictor = RMVPE(device=device, sample_rate=sample_rate)
+    else:
+        predictor = FCPE(device=device, sample_rate=sample_rate, hop_size=hop_size)
+
+    with _F0_LOCK:
+        _F0_CACHE[key] = predictor
+    return predictor
+
+
+def clear_f0_cache():
+    """Освобождает кэш F0-предикторов."""
+    with _F0_LOCK:
+        _F0_CACHE.clear()

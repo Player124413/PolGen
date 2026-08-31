@@ -29,7 +29,13 @@ sys.modules["fairseq.data.dictionary"] = fairseq_data_dictionary
 
 
 def load_model(filename):
-    state = torch.load(filename, map_location="cpu", weights_only=False)
+    # mmap=True позволяет читать веса лениво со страницы файла: не загружает
+    # весь чекпойнт в RAM (экономит ~размер модели пиковой памяти).
+    # Старые (не-zip) чекпойнты mmap не поддерживают — тогда обычная загрузка.
+    try:
+        state = torch.load(filename, map_location="cpu", weights_only=False, mmap=True)
+    except Exception:
+        state = torch.load(filename, map_location="cpu", weights_only=False)
 
     model = HubertModel(HubertConfig(**state["cfg"]["model"]), num_classes=int(state["model"]["label_embs_concat"].shape[0]))
     model.load_state_dict(state["model"], strict=False)

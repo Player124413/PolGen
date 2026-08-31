@@ -1,22 +1,69 @@
+import os
+import shutil
 import subprocess
 
-import librosa
 import numpy as np
-import soundfile as sf
+
+
+def _find_ffmpeg():
+    """Ищет бинарник ffmpeg в PATH (на Android/Termux он ставится через pkg)."""
+    return shutil.which("ffmpeg")
+
+
+def _load_audio_ffmpeg(file: str, sample_rate: int) -> np.ndarray:
+    """Декодирует аудио любого формата через ffmpeg-пайп (моно, f32le, нужная SR).
+
+    Быстрее и универсальнее связки soundfile+librosa: понимает mp3/m4a/ogg/
+    opus/flac/wav и даже видеофайлы, не требует C-расширений.
+    """
+    cmd = [
+        "ffmpeg",
+        "-nostdin",
+        "-i",
+        file,
+        "-vn",  # игнорировать видео-дорожки
+        "-ac",
+        "1",  # моно
+        "-ar",
+        str(sample_rate),
+        "-f",
+        "f32le",
+        "-",
+    ]
+    result = subprocess.run(cmd, capture_output=True, check=True)
+    audio = np.frombuffer(result.stdout, dtype=np.float32)
+    return audio.copy()  # отвязываем от буфера результата
+
+
+def _load_audio_soundfile(file: str, sample_rate: int) -> np.ndarray:
+    """Резервный путь через soundfile + librosa (если ffmpeg не найден)."""
+    import librosa  # noqa: PLC0415
+    import soundfile as sf  # noqa: PLC0415
+
+    audio, sr = sf.read(file)
+    if len(audio.shape) > 1:
+        audio = librosa.to_mono(audio.T)
+    if sr != sample_rate:
+        audio = librosa.resample(audio, orig_sr=sr, target_sr=sample_rate)
+    return audio.flatten()
 
 
 def load_audio(file, sample_rate):
     try:
         file = file.strip(" ").strip('"').strip("\n").strip('"').strip(" ")
-        audio, sr = sf.read(file)
-        if len(audio.shape) > 1:
-            audio = librosa.to_mono(audio.T)
-        if sr != sample_rate:
-            audio = librosa.resample(audio, orig_sr=sr, target_sr=sample_rate)
+        if not os.path.exists(file):
+            raise FileNotFoundError(f"Файл не найден: {file}")
+
+        if _find_ffmpeg() is not None:
+            try:
+                return _load_audio_ffmpeg(file, sample_rate)
+            except subprocess.CalledProcessError:
+                # ffmpeg не смог декодировать — пробуем резервный путь
+                pass
+
+        return _load_audio_soundfile(file, sample_rate)
     except Exception as error:
         raise RuntimeError(f"Произошла ошибка при загрузке аудио: {error}") from error
-
-    return audio.flatten()
 
 
 def save_audio(audio_data, sample_rate, output_path, output_format="wav", stereo=False):
@@ -39,6 +86,7 @@ def save_audio(audio_data, sample_rate, output_path, output_format="wav", stereo
     # Базовые параметры FFmpeg
     cmd = [
         "ffmpeg",
+        "-nostdin",
         "-y",  # Перезаписывать выходной файл
         "-f",
         input_format,  # Формат входных данных

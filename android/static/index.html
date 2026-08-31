@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#0c120e">
+<title>PolGen — Android</title>
+<style>
+:root {
+  --bg: #0c120e; --card: #141c16; --card2: #1a241d; --line: #22301f;
+  --text: #e6efe8; --muted: #8aa192; --green: #22c55e; --green2: #16a34a;
+  --danger: #ef4444; --radius: 14px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+body {
+  font-family: -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif;
+  background: var(--bg); color: var(--text);
+  padding-bottom: calc(64px + env(safe-area-inset-bottom));
+}
+header {
+  position: sticky; top: 0; z-index: 10;
+  padding: calc(10px + env(safe-area-inset-top)) 16px 10px;
+  background: linear-gradient(180deg, #0c120e 80%, transparent);
+  display: flex; align-items: center; gap: 10px;
+}
+header .logo { font-size: 22px; }
+header h1 { font-size: 18px; font-weight: 700; }
+header .ver { font-size: 11px; color: var(--muted); margin-left: auto; }
+main { padding: 8px 14px 20px; max-width: 640px; margin: 0 auto; }
+.tab { display: none; animation: fade .18s ease; }
+.tab.active { display: block; }
+@keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; } }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; margin-bottom: 12px; }
+.card h3 { font-size: 13px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 10px; }
+.row { display: flex; gap: 10px; align-items: center; }
+.row > * { flex: 1; }
+label.f { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 5px; }
+select, input[type=text], textarea {
+  width: 100%; padding: 11px 12px; border-radius: 10px;
+  background: var(--card2); border: 1px solid var(--line); color: var(--text);
+  font-size: 15px; outline: none; appearance: none;
+}
+select:focus, input:focus, textarea:focus { border-color: var(--green2); }
+textarea { min-height: 96px; resize: vertical; font-family: inherit; }
+input[type=range] { width: 100%; accent-color: var(--green); height: 30px; }
+.range-val { float: right; color: var(--green); font-weight: 600; font-size: 13px; }
+.switch { display: flex; justify-content: space-between; align-items: center; padding: 9px 0; }
+.switch span { font-size: 14px; }
+.cb { appearance: none; width: 46px; height: 26px; border-radius: 13px; background: var(--card2); border: 1px solid var(--line); position: relative; transition: .15s; flex: none; }
+.cb:checked { background: var(--green2); border-color: var(--green2); }
+.cb::after { content: ""; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: .15s; }
+.cb:checked::after { left: 22px; }
+button {
+  width: 100%; padding: 14px; border: none; border-radius: 12px;
+  background: var(--green2); color: #fff; font-size: 16px; font-weight: 700; cursor: pointer;
+}
+button:active { transform: scale(.98); background: var(--green); }
+button:disabled { opacity: .45; }
+button.ghost { background: var(--card2); border: 1px solid var(--line); color: var(--text); font-weight: 600; }
+button.small { padding: 8px 12px; font-size: 13px; width: auto; }
+button.danger { background: #7f1d1d; }
+.file-label {
+  display: block; padding: 18px 14px; border: 2px dashed var(--line);
+  border-radius: 12px; text-align: center; color: var(--muted); font-size: 14px;
+}
+.file-label.has { border-color: var(--green2); color: var(--green); }
+input[type=file] { display: none; }
+.progress-wrap { margin-top: 12px; display: none; }
+.progress-bar { height: 10px; background: var(--card2); border-radius: 6px; overflow: hidden; }
+.progress-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--green2), var(--green)); border-radius: 6px; transition: width .4s; }
+.progress-msg { font-size: 13px; color: var(--muted); margin-top: 6px; min-height: 18px; }
+.progress-msg.err { color: var(--danger); }
+.result { margin-top: 12px; display: none; }
+.result audio { width: 100%; margin: 8px 0; }
+.result .row { margin-top: 8px; }
+.item {
+  display: flex; align-items: center; gap: 10px; padding: 11px 12px;
+  background: var(--card2); border-radius: 10px; margin-bottom: 8px; font-size: 14px;
+}
+.item .grow { flex: 1; min-width: 0; }
+.item .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.item .sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.badge { font-size: 10px; padding: 3px 8px; border-radius: 20px; background: #14301c; color: var(--green); flex: none; }
+.badge.gray { background: #22271f; color: var(--muted); }
+nav {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 10;
+  display: flex; background: #0a0f0b; border-top: 1px solid var(--line);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+nav button {
+  flex: 1; background: none; color: var(--muted); font-size: 10.5px;
+  padding: 8px 0 7px; border-radius: 0; display: flex; flex-direction: column; gap: 3px; align-items: center;
+}
+nav button .ico { font-size: 20px; }
+nav button.active { color: var(--green); }
+.hint { font-size: 12px; color: var(--muted); line-height: 1.5; margin-top: 8px; }
+.spin { display: inline-block; animation: rot 1s linear infinite; }
+@keyframes rot { to { transform: rotate(360deg); } }
+.kv { display: flex; justify-content: space-between; padding: 7px 0; font-size: 13.5px; border-bottom: 1px solid var(--line); }
+.kv:last-child { border-bottom: none; }
+.kv b { font-weight: 600; }
+.empty { text-align: center; color: var(--muted); font-size: 13px; padding: 18px 0; }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="logo">🌿</span>
+  <h1>PolGen <small style="color:var(--muted);font-weight:400">Android</small></h1>
+  <span class="ver" id="ver"></span>
+</header>
+
+<main>
+
+<!-- ═══════════ КОНВЕРТАЦИЯ ═══════════ -->
+<section class="tab active" id="tab-convert">
+  <div class="card">
+    <h3>🎤 Замена голоса</h3>
+    <label class="f">Голосовая модель</label>
+    <div class="row">
+      <select id="cv-model"></select>
+      <button class="ghost small" style="flex:none" onclick="refreshState()">⟳</button>
+    </div>
+    <div id="cv-model-info" class="hint"></div>
+
+    <label class="f">Аудиофайл (wav / mp3 / m4a / ogg / flac / видео)</label>
+    <label class="file-label" id="cv-file-label" onclick="document.getElementById('cv-file').click()">
+      📁 Выбрать аудиофайл
+    </label>
+    <input type="file" id="cv-file" accept="audio/*,video/*" onchange="onFilePick(this, 'cv-file-label')">
+
+    <label class="f">Высота тона <span class="range-val" id="cv-pitch-val">0</span></label>
+    <input type="range" id="cv-pitch" min="-24" max="24" step="1" value="0" oninput="document.getElementById('cv-pitch-val').textContent=this.value">
+
+    <div class="row">
+      <div>
+        <label class="f">Метод F0</label>
+        <select id="cv-f0"></select>
+      </div>
+      <div>
+        <label class="f">Формат</label>
+        <select id="cv-format">
+          <option value="wav">WAV</option><option value="mp3" selected>MP3</option>
+          <option value="flac">FLAC</option><option value="ogg">OGG</option><option value="m4a">M4A</option>
+        </select>
+      </div>
+    </div>
+
+    <label class="f">Сила индекса (тембр) <span class="range-val" id="cv-idx-val">0.25</span></label>
+    <input type="range" id="cv-idx" min="0" max="1" step="0.05" value="0.25" oninput="document.getElementById('cv-idx-val').textContent=this.value">
+
+    <label class="f">Защита согласных <span class="range-val" id="cv-prot-val">0.5</span></label>
+    <input type="range" id="cv-prot" min="0" max="0.5" step="0.05" value="0.5" oninput="document.getElementById('cv-prot-val').textContent=this.value">
+
+    <div class="switch"><span>🎛 АвтоПитч (авто-определение тона)</span><input type="checkbox" class="cb" id="cv-autopitch"></div>
+    <div class="switch"><span>🎵 АвтоТюн (коррекция нот)</span><input type="checkbox" class="cb" id="cv-autotune"></div>
+    <div class="switch"><span>🎧 Стерео на выходе</span><input type="checkbox" class="cb" id="cv-stereo"></div>
+
+    <div style="margin-top:14px">
+      <button id="cv-btn" onclick="startConvert()">✨ Конвертировать</button>
+    </div>
+
+    <div class="progress-wrap" id="cv-prog">
+      <div class="progress-bar"><div class="progress-fill" id="cv-fill"></div></div>
+      <div class="progress-msg" id="cv-msg"></div>
+    </div>
+    <div class="result" id="cv-result">
+      <audio controls id="cv-audio"></audio>
+      <div class="row">
+        <button class="ghost small" onclick="downloadResult(lastConvert)">⬇️ Скачать</button>
+        <button class="ghost small" onclick="shareResult(lastConvert)">📤 Поделиться</button>
+        <button class="ghost small" onclick="saveToMusic(lastConvert)">🎵 В Музыку</button>
+      </div>
+    </div>
+  </div>
+  <div class="hint">💡 Первая конвертация загружает модели (~1 ГБ RAM) и занимает больше времени. Включи Wake Lock на вкладке «Система», чтобы экран не гас во время конвертации.</div>
+</section>
+
+<!-- ═══════════ TTS ═══════════ -->
+<section class="tab" id="tab-tts">
+  <div class="card">
+    <h3>🗣️ Текст → Речь → Кавер</h3>
+    <label class="f">Голос Edge-TTS</label>
+    <input type="text" id="tts-search" placeholder="🔍 Поиск голоса (ru, en, male...)" oninput="renderVoices()">
+    <select id="tts-voice" style="margin-top:8px"></select>
+
+    <label class="f">Текст</label>
+    <textarea id="tts-text" placeholder="Введите текст для озвучки..."></textarea>
+
+    <div class="row">
+      <div>
+        <label class="f">Скорость <span class="range-val" id="tts-rate-val">0</span></label>
+        <input type="range" id="tts-rate" min="-100" max="100" value="0" oninput="document.getElementById('tts-rate-val').textContent=this.value">
+      </div>
+      <div>
+        <label class="f">Громкость <span class="range-val" id="tts-vol-val">0</span></label>
+        <input type="range" id="tts-vol" min="-100" max="100" value="0" oninput="document.getElementById('tts-vol-val').textContent=this.value">
+      </div>
+    </div>
+    <label class="f">Питч TTS <span class="range-val" id="tts-pitch-val">0</span></label>
+    <input type="range" id="tts-pitch" min="-100" max="100" value="0" oninput="document.getElementById('tts-pitch-val').textContent=this.value">
+
+    <div class="row" style="margin-top:8px">
+      <div>
+        <label class="f">Модель</label>
+        <select id="tts-model"></select>
+      </div>
+      <div>
+        <label class="f">Питч RVC <span class="range-val" id="tts-rvcpitch-val">0</span></label>
+        <input type="range" id="tts-rvcpitch" min="-24" max="24" value="0" oninput="document.getElementById('tts-rvcpitch-val').textContent=this.value">
+      </div>
+    </div>
+
+    <div style="margin-top:14px">
+      <button id="tts-btn" onclick="startTts()">🎙️ Озвучить и конвертировать</button>
+    </div>
+
+    <div class="progress-wrap" id="tts-prog">
+      <div class="progress-bar"><div class="progress-fill" id="tts-fill"></div></div>
+      <div class="progress-msg" id="tts-msg"></div>
+    </div>
+    <div class="result" id="tts-result">
+      <label class="f">Исходная речь</label>
+      <audio controls id="tts-audio-src"></audio>
+      <label class="f">Результат</label>
+      <audio controls id="tts-audio"></audio>
+      <div class="row">
+        <button class="ghost small" onclick="downloadResult(lastTts)">⬇️ Скачать</button>
+        <button class="ghost small" onclick="shareResult(lastTts)">📤 Поделиться</button>
+        <button class="ghost small" onclick="saveToMusic(lastTts)">🎵 В Музыку</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ МОДЕЛИ ═══════════ -->
+<section class="tab" id="tab-models">
+  <div class="card">
+    <h3>📦 Установленные модели</h3>
+    <div id="models-list"></div>
+  </div>
+  <div class="card">
+    <h3>🔗 Установить по ссылке (ZIP)</h3>
+    <label class="f">Имя модели</label>
+    <input type="text" id="ins-name" placeholder="Например: Мой_голос">
+    <label class="f">Ссылка (HuggingFace, Pixeldrain, Google Drive, Dropbox, Яндекс.Диск, Mega)</label>
+    <input type="text" id="ins-url" placeholder="https://huggingface.co/...">
+    <div style="margin-top:12px"><button onclick="installUrl()">⬇️ Загрузить</button></div>
+    <div class="progress-wrap" id="ins-prog">
+      <div class="progress-bar"><div class="progress-fill" id="ins-fill"></div></div>
+      <div class="progress-msg" id="ins-msg"></div>
+    </div>
+  </div>
+  <div class="card">
+    <h3>📁 Установить из файла</h3>
+    <label class="f">Имя модели</label>
+    <input type="text" id="upl-name" placeholder="Например: Мой_голос">
+    <label class="f">Файл (.zip или .pth + .index)</label>
+    <label class="file-label" id="upl-file-label" onclick="document.getElementById('upl-file').click()">📁 Выбрать файл</label>
+    <input type="file" id="upl-file" accept=".zip,.pth,.index" onchange="onFilePick(this, 'upl-file-label')">
+    <div style="margin-top:12px"><button onclick="installFile()">⬆️ Установить</button></div>
+  </div>
+</section>
+
+<!-- ═══════════ СИСТЕМА ═══════════ -->
+<section class="tab" id="tab-system">
+  <div class="card">
+    <h3>⚙️ Устройство</h3>
+    <div id="sys-info"><div class="empty"><span class="spin">◌</span> Загрузка...</div></div>
+  </div>
+  <div class="card">
+    <h3>🧠 Память</h3>
+    <div class="hint">Модели кэшируются в RAM для быстрых повторных конвертаций. Если телефону не хватает памяти — освободи кэш.</div>
+    <div id="cache-info" class="hint"></div>
+    <div class="row" style="margin-top:10px">
+      <button class="ghost small" onclick="clearCache()">🗑 Освободить память</button>
+      <button class="ghost small" id="wl-btn" onclick="toggleWakelock()">🔒 Wake Lock: выкл</button>
+    </div>
+  </div>
+  <div class="card">
+    <h3>📂 Результаты</h3>
+    <div id="outputs-list"></div>
+  </div>
+  <div class="card">
+    <h3>ℹ️ О PolGen Android</h3>
+    <div class="hint">
+      Полноценный RVC-конвейер (HuBERT + RMVPE + HiFi-GAN + индекс тембра), работающий прямо на телефоне через Termux.
+      Работает на всех 64-битных Android-устройствах (arm64-v8a).<br><br>
+      ⚠️ Соблюдай условия использования: не используй заменённый голос для обмана, дискредитации и мошенничества.
+    </div>
+  </div>
+</section>
+
+</main>
+
+<nav>
+  <button class="active" data-tab="convert" onclick="showTab('convert', this)"><span class="ico">🎤</span>Конвертация</button>
+  <button data-tab="tts" onclick="showTab('tts', this)"><span class="ico">🗣️</span>TTS</button>
+  <button data-tab="models" onclick="showTab('models', this)"><span class="ico">📦</span>Модели</button>
+  <button data-tab="system" onclick="showTab('system', this)"><span class="ico">⚙️</span>Система</button>
+</nav>
+
+<script>
+let state = null;
+let lastConvert = null, lastTts = null;
+let pollTimer = null;
+let wakelock = false;
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function showTab(name, btn) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  $('tab-' + name).classList.add('active');
+  btn.classList.add('active');
+  if (name === 'system' || name === 'models') refreshState();
+}
+
+function onFilePick(input, labelId) {
+  const label = $(labelId);
+  if (input.files.length) {
+    label.classList.add('has');
+    label.textContent = '📄 ' + input.files[0].name + ' (' + (input.files[0].size/1048576).toFixed(1) + ' МБ)';
+  } else { label.classList.remove('has'); label.textContent = '📁 Выбрать файл'; }
+}
+
+async function api(path, opts) {
+  const res = await fetch(path, opts);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+  return data;
+}
+
+async function refreshState() {
+  try {
+    state = await api('/api/state');
+    if (state.system && state.system.version) $('ver').textContent = 'v' + state.system.version;
+    const models = state.models || [];
+    const opts = models.length
+      ? models.map(m => `<option value="${esc(m.name)}">${esc(m.name)}${m.index ? ' 🎯' : ''}</option>`).join('')
+      : '<option value="">— нет моделей —</option>';
+    ['cv-model', 'tts-model'].forEach(id => {
+      const sel = $(id); const cur = sel.value;
+      sel.innerHTML = opts;
+      if ([...sel.options].some(o => o.value === cur)) sel.value = cur;
+    });
+    const m = models.find(x => x.name === $('cv-model').value);
+    if (m) $('cv-model-info').textContent = `🎯 индекс: ${m.index ? 'есть' : 'нет'} · ${m.size_mb} МБ`;
+    const f0sel = $('cv-f0'); const curF0 = f0sel.value;
+    f0sel.innerHTML = (state.f0_methods || ['rmvpe']).map(x => `<option>${esc(x)}</option>`).join('');
+    if ([...f0sel.options].some(o => o.value === curF0)) f0sel.value = curF0;
+    renderVoices();
+    renderModels(models);
+    renderSystem();
+    renderOutputs(state.outputs || []);
+  } catch (e) { console.error(e); }
+}
+
+function renderVoices() {
+  const sel = $('tts-voice'); const cur = sel.value;
+  const q = ($('tts-search').value || '').toLowerCase();
+  const voices = (state?.voices || []).filter(v =>
+    !q || v.ShortName.toLowerCase().includes(q) || (v.Locale || '').toLowerCase().includes(q) ||
+    (v.Gender || '').toLowerCase().includes(q));
+  sel.innerHTML = (voices.length ? voices : state?.voices || []).map(v =>
+    `<option value="${esc(v.ShortName)}">${esc(v.ShortName)} (${v.Gender === 'Male' ? '♂' : '♀'} ${esc(v.Locale)})</option>`).join('');
+  if (cur && [...sel.options].some(o => o.value === cur)) sel.value = cur;
+}
+
+function renderModels(models) {
+  const el = $('models-list');
+  if (!models.length) { el.innerHTML = '<div class="empty">Моделей пока нет — установи по ссылке или из файла 👇</div>'; return; }
+  el.innerHTML = models.map(m => `
+    <div class="item">
+      <div class="grow"><div class="name">${esc(m.name)}</div>
+      <div class="sub">${m.size_mb} МБ</div></div>
+      <span class="badge ${m.index ? '' : 'gray'}">${m.index ? '🎯 индекс' : 'без индекса'}</span>
+      <button class="danger small" onclick="deleteModel('${esc(m.name)}')">✕</button>
+    </div>`).join('');
+}
+
+function renderSystem() {
+  const s = state?.system; if (!s) return;
+  const rows = [
+    ['Устройство', s.device + (s.is_android ? ' (Android)' : '')],
+    ['Потоки CPU', s.threads],
+    ['Оперативная память', s.ram_gb + ' ГБ'],
+    ['Размер чанка', s.chunk_sec + ' с'],
+    ['PyTorch', s.torch], ['Python', s.python],
+  ];
+  $('sys-info').innerHTML = rows.map(r => `<div class="kv"><span>${r[0]}</span><b>${esc(r[1])}</b></div>`).join('');
+  const c = s.cache || {};
+  $('cache-info').innerHTML = `HuBERT в кэше: <b>${c.hubert_cached ? 'да' : 'нет'}</b> · голосовых моделей: <b>${c.voices_cached}/${c.max_voices}</b> · попаданий: <b>${c.hits ?? 0}</b>`;
+}
+
+function renderOutputs(files) {
+  const el = $('outputs-list');
+  if (!files.length) { el.innerHTML = '<div class="empty">Пока пусто</div>'; return; }
+  el.innerHTML = files.map(f => `
+    <div class="item">
+      <div class="grow"><div class="name">${esc(f.name)}</div><div class="sub">${f.size_mb} МБ · ${new Date(f.mtime*1000).toLocaleString('ru')}</div></div>
+      <button class="ghost small" onclick="downloadResult('${esc(f.name)}')">⬇️</button>
+      <button class="ghost small" onclick="shareResult('${esc(f.name)}')">📤</button>
+      <button class="danger small" onclick="deleteOutput('${esc(f.name)}')">✕</button>
+    </div>`).join('');
+}
+
+// ── Задачи ──
+function startJob(jobId, ui) {
+  $(ui.prog).style.display = 'block';
+  $(ui.fill).style.width = '0%';
+  $(ui.msg).classList.remove('err');
+  $(ui.msg).textContent = 'В очереди...';
+  if (ui.btn) $(ui.btn).disabled = true;
+  clearInterval(pollTimer);
+  pollTimer = setInterval(async () => {
+    try {
+      const job = await api('/api/job?id=' + jobId);
+      $(ui.fill).style.width = Math.round(job.progress * 100) + '%';
+      $(ui.msg).textContent = job.message || '';
+      if (job.state === 'done') {
+        clearInterval(pollTimer);
+        $(ui.msg).textContent = '✅ ' + (job.message || 'Готово');
+        ui.onDone(job);
+        if (ui.btn) $(ui.btn).disabled = false;
+        refreshState();
+      } else if (job.state === 'error') {
+        clearInterval(pollTimer);
+        $(ui.msg).classList.add('err');
+        $(ui.msg).textContent = '❌ ' + (job.error || 'Ошибка');
+        if (ui.btn) $(ui.btn).disabled = false;
+      }
+    } catch (e) {
+      clearInterval(pollTimer);
+      $(ui.msg).classList.add('err');
+      $(ui.msg).textContent = '❌ ' + e.message;
+      if (ui.btn) $(ui.btn).disabled = false;
+    }
+  }, 700);
+}
+
+// ── Конвертация ──
+async function startConvert() {
+  const file = $('cv-file').files[0];
+  const model = $('cv-model').value;
+  if (!model) return alert('Сначала установи голосовую модель на вкладке «Модели»');
+  if (!file) return alert('Выбери аудиофайл');
+
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('params', JSON.stringify({
+    rvc_model: model,
+    f0_method: $('cv-f0').value,
+    rvc_pitch: +$('cv-pitch').value,
+    index_rate: +$('cv-idx').value,
+    protect: +$('cv-prot').value,
+    autopitch: $('cv-autopitch').checked,
+    autotune: $('cv-autotune').checked,
+    stereo_sound: $('cv-stereo').checked,
+    output_format: $('cv-format').value,
+  }));
+
+  const data = await api('/api/convert', { method: 'POST', body: fd });
+  startJob(data.job_id, {
+    prog: 'cv-prog', fill: 'cv-fill', msg: 'cv-msg', btn: 'cv-btn',
+    onDone: job => {
+      lastConvert = job.result;
+      $('cv-audio').src = '/output/' + encodeURIComponent(job.result);
+      $('cv-result').style.display = 'block';
+    }
+  });
+}
+
+// ── TTS ──
+async function startTts() {
+  const model = $('tts-model').value;
+  const text = $('tts-text').value.trim();
+  const voice = $('tts-voice').value;
+  if (!text) return alert('Введи текст');
+  if (!voice) return alert('Выбери голос');
+  if (!model) return alert('Сначала установи голосовую модель');
+
+  const data = await api('/api/tts', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      rvc_model: model,
+      f0_method: $('cv-f0').value,
+      rvc_pitch: +$('tts-rvcpitch').value,
+      index_rate: +$('cv-idx').value,
+      protect: +$('cv-prot').value,
+      autotune: $('cv-autotune').checked,
+      output_format: $('cv-format').value,
+      tts_voice: voice, tts_text: text,
+      tts_rate: +$('tts-rate').value, tts_volume: +$('tts-vol').value, tts_pitch: +$('tts-pitch').value,
+    })
+  });
+  startJob(data.job_id, {
+    prog: 'tts-prog', fill: 'tts-fill', msg: 'tts-msg', btn: 'tts-btn',
+    onDone: job => {
+      const [src, res] = job.result;
+      lastTts = res;
+      $('tts-audio-src').src = '/output/' + encodeURIComponent(src);
+      $('tts-audio').src = '/output/' + encodeURIComponent(res);
+      $('tts-result').style.display = 'block';
+    }
+  });
+}
+
+// ── Установка моделей ──
+async function installUrl() {
+  const url = $('ins-url').value.trim(), name = $('ins-name').value.trim();
+  if (!url || !name) return alert('Укажи ссылку и имя модели');
+  const data = await api('/api/install_url', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ url, name })
+  });
+  startJob(data.job_id, {
+    prog: 'ins-prog', fill: 'ins-fill', msg: 'ins-msg',
+    onDone: () => { $('ins-url').value = ''; $('ins-name').value = ''; refreshState(); }
+  });
+}
+
+async function installFile() {
+  const file = $('upl-file').files[0], name = $('upl-name').value.trim();
+  if (!file || !name) return alert('Выбери файл и укажи имя модели');
+  const fd = new FormData();
+  fd.append('file', file); fd.append('name', name);
+  const data = await api('/api/install_file', { method: 'POST', body: fd });
+  startJob(data.job_id, {
+    prog: 'ins-prog', fill: 'ins-fill', msg: 'ins-msg',
+    onDone: () => { $('upl-file').value = ''; onFilePick($('upl-file'), 'upl-file-label'); $('upl-name').value = ''; refreshState(); }
+  });
+}
+
+async function deleteModel(name) {
+  if (!confirm(`Удалить модель «${name}»?`)) return;
+  await api('/api/delete_model', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ name }) });
+  refreshState();
+}
+
+// ── Результаты ──
+function downloadResult(name) { if (name) location.href = '/output/' + encodeURIComponent(name); }
+async function shareResult(name) {
+  if (!name) return;
+  const url = '/output/' + encodeURIComponent(name);
+  try {
+    if (navigator.share) {
+      const res = await fetch(url); const blob = await res.blob();
+      const ext = name.split('.').pop();
+      await navigator.share({ files: [new File([blob], name, { type: blob.type || 'audio/' + ext })] });
+      return;
+    }
+  } catch (e) { if (e.name === 'AbortError') return; }
+  location.href = url;
+}
+async function saveToMusic(name) {
+  if (!name) return;
+  try { await api('/api/share', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ name }) });
+    alert('Сохранено в Музыку/PolGen 🎵');
+  } catch (e) { alert('Не удалось: ' + e.message + '\n(нужен доступ к хранилищу: termux-setup-storage)'); }
+}
+async function deleteOutput(name) {
+  if (!confirm(`Удалить ${name}?`)) return;
+  await api('/api/delete_output', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ name }) });
+  refreshState();
+}
+
+// ── Система ──
+async function clearCache() {
+  await api('/api/cache_clear', { method: 'POST' });
+  refreshState();
+  alert('Память освобождена ✅');
+}
+async function toggleWakelock() {
+  wakelock = !wakelock;
+  const res = await api('/api/wakelock', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ on: wakelock }) });
+  if (!res.ok) { wakelock = false; alert('Termux:API недоступен. Установи: pkg install termux-api'); }
+  $('wl-btn').textContent = '🔒 Wake Lock: ' + (wakelock ? 'вкл' : 'выкл');
+}
+
+refreshState();
+setInterval(() => { if ($('tab-system').classList.contains('active')) refreshState(); }, 10000);
+</script>
+</body>
+</html>

@@ -1,10 +1,48 @@
 import numpy as np
 import torch
-from librosa.filters import mel
 from scipy.signal import medfilt
+
+from rvc.lib.audio_compat import mel_filterbank
+
+try:
+    from librosa.filters import mel as _librosa_mel
+except Exception:  # noqa: BLE001 - librosa недоступна (Android/TermUX и т.п.)
+    _librosa_mel = None
 
 N_MELS = 128
 N_CLASS = 360
+
+
+def _default_chunk_frames() -> int:
+    """Адаптивный размер чанка mel2hidden по объёму RAM.
+
+    Активации DeepUnet растут ~37 КБ/фрейм (670 МБ на 3-минутный трек).
+    На телефонах режем мел на чанки, чтобы пик памяти был ограничен;
+    на десктопе сохраняется поведение оригинала (32000 фреймов).
+    """
+    ram_gb = None
+    try:
+        with open("/proc/meminfo", "r", encoding="utf-8") as f:
+            for line in f:
+                if line.startswith("MemTotal"):
+                    ram_gb = int(line.split()[1]) / 1024**2
+                    break
+    except OSError:
+        pass
+    if ram_gb is None or ram_gb >= 12:
+        return 32000  # поведение оригинала
+    if ram_gb >= 8:
+        return 12032  # 376 * 32
+    if ram_gb >= 6:
+        return 8032  # 251 * 32
+    return 4032  # 126 * 32
+
+
+def _mel(sr, n_fft, n_mels, fmin, fmax, htk=True):
+    """Мел-фильтрбанк: librosa при наличии, иначе чистый numpy-эквивалент."""
+    if _librosa_mel is not None:
+        return _librosa_mel(sr=sr, n_fft=n_fft, n_mels=n_mels, fmin=fmin, fmax=fmax, htk=htk)
+    return mel_filterbank(sr=sr, n_fft=n_fft, n_mels=n_mels, fmin=fmin, fmax=fmax, htk=htk)
 
 
 class BiGRU(torch.nn.Module):
@@ -254,7 +292,7 @@ class MelSpectrogram(torch.nn.Module):
         super().__init__()
         n_fft = win_length if n_fft is None else n_fft
         self.hann_window = {}
-        mel_basis = mel(
+        mel_basis = _mel(
             sr=sample_rate,
             n_fft=n_fft,
             n_mels=n_mel_channels,
@@ -315,7 +353,9 @@ class RMVPEF0Predictor:
         cents_mapping = 20 * np.arange(N_CLASS) + 1997.3794084376191
         self.cents_mapping = np.pad(cents_mapping, (4, 4))
 
-    def mel2hidden(self, input_mel, chunk_size=32000):
+    def mel2hidden(self, input_mel, chunk_size=None):
+        if chunk_size is None:
+            chunk_size = _default_chunk_frames()
         with torch.inference_mode():
             n_frames = input_mel.shape[-1]
             padded_mel = torch.nn.functional.pad(input_mel, (0, 32 * ((n_frames - 1) // 32 + 1) - n_frames), mode="reflect")

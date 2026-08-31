@@ -63,6 +63,7 @@ PolGen предоставляет гибкость в выборе моделе�
 > | **Windows** | [`PolGen_Win.zip`](https://huggingface.co/Politrees/PolGen/resolve/main/Win/PolGen-1.3.0-beta.8_Win.zip?download=true) |
 > | **Linux** | [`PolGen_Linux.zip`](https://huggingface.co/Politrees/PolGen/resolve/main/Linux/PolGen-1.3.0-beta.8_Linux.zip?download=true) |
 > | **MacOS** | [`PolGen_MacOS.zip`](https://huggingface.co/Politrees/PolGen/resolve/main/MacOS/PolGen-1.3.0-beta.8_MacOS.zip?download=true) |
+> | **Android** | [`PolGen_Android.zip`](https://huggingface.co/Politrees/PolGen/resolve/main/Android/PolGen-1.3.0-beta.8_Android.zip?download=true) |
 >
 > **Запуск:**
 > - **Windows**: `run-PolGen.bat`
@@ -82,6 +83,28 @@ PolGen предоставляет гибкость в выборе моделе�
 > > Для Windows, возможно, потребуется установить **[Microsoft C++ Build Tools](https://visualstudio.microsoft.com/ru/visual-cpp-build-tools/)** с выбранной нагрузкой **«Desktop development with C++»**.
 
 </details>
+
+## 📱 Запуск на Android
+
+PolGen работает **напрямую на телефоне** — без root, облака и ПК: сервер
+крутится в [Termux](https://f-droid.org/packages/com.termux/), интерфейс
+открывается в браузере как обычное приложение. Поддерживаются все
+64-битные устройства (arm64-v8a / x86_64), Android 7+.
+
+> [!TIP]
+> Рекомендуется 6+ ГБ RAM (на 4 ГБ — треки до ~1–2 минут). Конвертация идёт
+> на CPU: ~2–4 минуты на минуту аудио.
+
+```bash
+pkg install git
+git clone https://github.com/Politrees/PolGen.git ~/PolGen
+cd ~/PolGen
+bash android/install.sh   # установка зависимостей и моделей
+bash android/run.sh       # запуск, браузер откроется сам
+```
+
+Подробности: [`android/README.md`](android/README.md).
+
 
 ---
 

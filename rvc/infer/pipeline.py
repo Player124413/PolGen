@@ -1,14 +1,27 @@
+import ctypes
+import gc
 import os
 
-import faiss
-import librosa
 import numpy as np
 import torch
 import torch.nn.functional as F
 from scipy import signal
-from tqdm import tqdm
 
-from rvc.lib.predictors.f0 import CREPE, FCPE, RMVPE, AutoTune, calc_pitch_shift
+# malloc_trim: возврат освобождённых страниц кучи ОС (glibc). На Android/bionic
+# функции нет — остаётся None, и вызов просто пропускается.
+try:
+    _malloc_trim = ctypes.CDLL("libc.so.6").malloc_trim
+except OSError:  # pragma: no cover - зависит от платформы
+    _malloc_trim = None
+
+from rvc.lib.audio_compat import frame_rms
+from rvc.lib.faiss_numpy import open_index
+from rvc.lib.predictors.f0 import CREPE, FCPE, RMVPE, AutoTune, calc_pitch_shift, get_cached_f0_predictor
+
+try:
+    from librosa.feature import rms as _librosa_rms
+except Exception:  # noqa: BLE001 - среда без librosa (Android/TermUX и т.п.)
+    _librosa_rms = None
 
 # Фильтр Баттерворта для высоких частот
 bh, ah = signal.butter(N=5, Wn=48, btype="high", fs=16000)
@@ -17,6 +30,13 @@ bh, ah = signal.butter(N=5, Wn=48, btype="high", fs=16000)
 # Класс для обработки аудио
 class AudioProcessor:
     @staticmethod
+    def _rms(y: np.ndarray, frame_length: int, hop_length: int) -> np.ndarray:
+        """RMS по фреймам: librosa при наличии, иначе численно эквивалентный numpy."""
+        if _librosa_rms is not None:
+            return _librosa_rms(y=y, frame_length=frame_length, hop_length=hop_length)
+        return frame_rms(y, frame_length=frame_length, hop_length=hop_length)
+
+    @staticmethod
     def change_rms(
         source_audio: np.ndarray,
         source_rate: int,
@@ -24,11 +44,11 @@ class AudioProcessor:
         target_rate: int,
         rate: float,
     ):
-        rms1 = librosa.feature.rms(y=source_audio, frame_length=source_rate // 2 * 2, hop_length=source_rate // 2)
-        rms2 = librosa.feature.rms(y=target_audio, frame_length=target_rate // 2 * 2, hop_length=target_rate // 2)
+        rms1 = AudioProcessor._rms(source_audio, source_rate // 2 * 2, source_rate // 2)
+        rms2 = AudioProcessor._rms(target_audio, target_rate // 2 * 2, target_rate // 2)
 
-        rms1 = F.interpolate(torch.from_numpy(rms1).float().unsqueeze(0), size=target_audio.shape[0], mode="linear").squeeze()
-        rms2 = F.interpolate(torch.from_numpy(rms2).float().unsqueeze(0), size=target_audio.shape[0], mode="linear").squeeze()
+        rms1 = F.interpolate(torch.from_numpy(np.ascontiguousarray(rms1)).float().unsqueeze(0), size=target_audio.shape[0], mode="linear").squeeze()
+        rms2 = F.interpolate(torch.from_numpy(np.ascontiguousarray(rms2)).float().unsqueeze(0), size=target_audio.shape[0], mode="linear").squeeze()
         rms2 = torch.maximum(rms2, torch.zeros_like(rms2) + 1e-6)
 
         adjusted_audio = target_audio * (torch.pow(rms1, 1 - rate) * torch.pow(rms2, rate - 1)).numpy()
@@ -79,13 +99,12 @@ class VC:
             f0 = model.get_f0(audio, f0_min, f0_max, p_len, ("full" if f0_method == "crepe" else "tiny"))
             del model
         elif f0_method in ("rmvpe", "rmvpe+"):
-            model = RMVPE(device=self.device, sample_rate=self.sample_rate)
+            # Кэшированный предиктор: веса RMVPE загружаются один раз
+            model = get_cached_f0_predictor(f0_method, self.device, self.sample_rate)
             f0 = model.get_f0(audio, f0_min, f0_max, f0_method)
-            del model
         elif f0_method == "fcpe":
-            model = FCPE(device=self.device, sample_rate=self.sample_rate, hop_size=self.window)
+            model = get_cached_f0_predictor(f0_method, self.device, self.sample_rate, self.window)
             f0 = model.get_f0(audio, f0_min, f0_max, p_len)
-            del model
 
         if f0 is None:
             raise ValueError("Метод F0 не распознан или не смог рассчитать F0.")
@@ -136,7 +155,7 @@ class VC:
             "output_layer": 9 if version == "v1" else 12,
         }
 
-        with torch.no_grad():
+        with torch.inference_mode():
             logits = model.extract_features(**inputs)
             feats = model.final_proj(logits[0]) if version == "v1" else logits[0]
 
@@ -146,7 +165,7 @@ class VC:
         if index is not None and big_npy is not None and index_rate != 0:
             npy = feats[0].cpu().numpy()
             score, ix = index.search(npy, k=8)
-            weight = np.square(1 / score)
+            weight = np.square(1 / np.maximum(score, 1e-12))
             weight /= weight.sum(axis=1, keepdims=True)
             npy = np.sum(big_npy[ix] * np.expand_dims(weight, axis=2), axis=1)
             feats = torch.from_numpy(npy).unsqueeze(0).to(self.device) * index_rate + (1 - index_rate) * feats
@@ -171,7 +190,7 @@ class VC:
             feats = feats.to(feats0.dtype)
 
         p_len = torch.tensor([p_len], device=self.device).long()
-        with torch.no_grad():
+        with torch.inference_mode():
             hasp = pitch is not None and pitchf is not None
             arg = (feats.float(), p_len, pitch, pitchf.float(), sid) if hasp else (feats.float(), p_len, sid)
             audio1 = (net_g.infer(*arg)[0][0, 0]).data.cpu().float().numpy()
@@ -206,30 +225,59 @@ class VC:
         autotune_tonic,
         autotune_scale,
         autotune_strength,
+        progress_callback=None,
     ):
         """Основной конвейер для преобразования аудио."""
         index = big_npy = None
         if file_index and os.path.exists(file_index) and index_rate != 0:
             try:
-                index = faiss.read_index(file_index)
-                big_npy = index.reconstruct_n(0, index.ntotal)
+                # Индекс кэшируется: повторные конвертации не перечитывают
+                # .index с диска (faiss — если установлен, иначе numpy-ридер)
+                index = open_index(file_index)
+                if index is not None:
+                    big_npy = index.reconstruct_n(0, index.ntotal)
             except Exception as error:
                 print(f"Произошла ошибка при чтении индекса FAISS: {error}")
+                index = big_npy = None
 
         opt_ts = []
         audio = signal.filtfilt(bh, ah, audio)
         audio_pad = np.pad(audio, (self.window // 2, self.window // 2), mode="reflect")
 
         if audio_pad.shape[0] > self.t_max:
-            audio_sum = np.zeros_like(audio)
-
-            for i in range(self.window):
-                audio_sum += audio_pad[i : i - self.window]
+            # Векторизованная оконная сумма (раньше — цикл из 160 итераций)
+            n_sum = audio_pad.shape[0] - self.window
+            strided = np.lib.stride_tricks.as_strided(
+                audio_pad,
+                shape=(self.window, n_sum),
+                strides=(audio_pad.strides[0], audio_pad.strides[0]),
+            )
+            audio_sum = strided.sum(axis=0)
 
             for t in range(self.t_center, audio.shape[0], self.t_center):
                 segment = audio_sum[t - self.t_query : t + self.t_query]
                 min_index = np.where(np.abs(segment) == np.abs(segment).min())[0][0]
                 opt_ts.append(t - self.t_query + min_index)
+
+            # Энергетические минимумы могут дать сегменты длиннее чанка
+            # (активации HiFi-GAN ~120 МБ на секунду аудио → пик RAM растёт
+            # с длиной трека). Ограничиваем: короткие (<x_center/2) склеиваем,
+            # длинные (>x_max) режем принудительно — пик памяти ограничен.
+            capped = []
+            s = 0
+            for t in opt_ts:
+                if t - s < self.t_center // 2:
+                    continue  # слишком близко к предыдущей точке разреза
+                while t - s > self.t_max:
+                    forced = (s + self.t_max) // self.window * self.window
+                    capped.append(forced)
+                    s = forced
+                capped.append(t)
+                s = t
+            while audio.shape[0] + 2 * self.t_pad - s > self.t_max + self.t_center // 2:
+                s += self.t_max
+                capped.append(s)
+            opt_ts = capped
 
         s = 0
         t = None
@@ -263,7 +311,8 @@ class VC:
             pitch_tensor = torch.tensor(pitch, device=self.device).unsqueeze(0).long()
             pitchf_tensor = torch.tensor(pitchf, device=self.device).unsqueeze(0).float()
 
-        for t in tqdm(opt_ts, desc="Конвертация"):
+        total_steps = len(opt_ts) + 1
+        for step, t in enumerate(opt_ts):
             t = t // self.window * self.window
 
             audio_segment = audio_pad[s : t + self.t_pad2 + self.window]
@@ -286,6 +335,13 @@ class VC:
                 )[self.t_pad_tgt : -self.t_pad_tgt],
             )
             s = t
+            # Циклические ссылки копятся между чанками и раздуливают RSS на
+            # длинных треках; после gc возвращаем страницы кучи ОС
+            gc.collect()
+            if _malloc_trim is not None:
+                _malloc_trim(0)
+            if progress_callback is not None:
+                progress_callback((step + 1) / (total_steps + 1), "Конвертация")
 
         pitch_segment = pitch_tensor[:, t // self.window :] if pitch_guidance and t is not None else pitch_tensor
         pitchf_segment = pitchf_tensor[:, t // self.window :] if pitch_guidance and t is not None else pitchf_tensor
@@ -305,6 +361,8 @@ class VC:
                 protect,
             )[self.t_pad_tgt : -self.t_pad_tgt],
         )
+        if progress_callback is not None:
+            progress_callback(1.0, "Конвертация")
 
         audio_opt = np.concatenate(audio_opt)
         if volume_envelope != 1:

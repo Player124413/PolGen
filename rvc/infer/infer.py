@@ -1,9 +1,10 @@
 import asyncio
 import gc
 import os
+import threading
+from collections import OrderedDict
 
 import edge_tts
-import gradio as gr
 import torch
 
 from rvc.infer.config import Config
@@ -11,7 +12,18 @@ from rvc.infer.pipeline import VC
 from rvc.lib.algorithm.synthesizers import Synthesizer
 from rvc.lib.fairseq import load_model
 from rvc.lib.my_utils import load_audio, save_audio
-from rvc.modules.audio_upscaler import upscale
+
+# Gradio не обязателен: ядро инференса должно работать и без него
+# (Android-версия использует собственный лёгкий веб-интерфейс)
+try:
+    import gradio as gr
+except Exception:  # noqa: BLE001 - gradio не установлен (Android/TermUX и т.п.)
+    gr = None
+
+try:
+    from rvc.modules.audio_upscaler import upscale as _upscale
+except Exception:  # noqa: BLE001 - PolFlashSR не установлен
+    _upscale = None
 
 # Определяем пути к папкам и файлам (константы)
 RVC_MODELS_DIR = os.path.join(os.getcwd(), "models", "RVC_models")
@@ -27,10 +39,11 @@ config = Config()
 
 
 # Отображает прогресс выполнения задачи.
-def display_progress(percent, message, is_print, progress=gr.Progress()):
+def display_progress(percent, message, is_print, progress=None):
     if is_print:
         print(message)
-    progress(percent, desc=message)
+    if progress is not None:
+        progress(percent, desc=message)
 
 
 # Загружает модель RVC и индекс по имени модели.
@@ -57,10 +70,98 @@ def load_hubert(model_path):
     return hubert
 
 
-# Получает конвертер голоса
-def get_vc(model_path):
-    # Загружаем состояние модели
-    cpt = torch.load(model_path, map_location="cpu", weights_only=True)
+class ModelCache:
+    """Потокобезопасный кэш моделей с LRU-вытеснением.
+
+    Раньше каждая конвертация заново загружала с диска HuBERT (~380 МБ),
+    RMVPE и веса голосовой модели — на телефоне это десятки секунд и
+    лишний гигабайт пиковой памяти. Теперь модели остаются в RAM и
+    переиспользуются между конвертациями.
+    """
+
+    def __init__(self):
+        self._lock = threading.RLock()
+        self._hubert = None  # (path, mtime_ns, model)
+        self._voices = OrderedDict()  # (path, mtime_ns) -> entry
+        self.max_voices = max(1, config.cache_max_models)
+        self.hits = 0
+        self.misses = 0
+
+    def get_hubert(self, model_path: str):
+        try:
+            mtime = os.stat(model_path).st_mtime_ns
+        except OSError:
+            mtime = 0
+        with self._lock:
+            if self._hubert is not None and self._hubert[0] == model_path and self._hubert[1] == mtime:
+                self.hits += 1
+                return self._hubert[2]
+            self.misses += 1
+
+        model = load_hubert(model_path)
+
+        with self._lock:
+            self._hubert = (model_path, mtime, model)
+        return model
+
+    def get_voice(self, model_path: str):
+        try:
+            mtime = os.stat(model_path).st_mtime_ns
+        except OSError:
+            mtime = 0
+        key = (model_path, mtime)
+        with self._lock:
+            entry = self._voices.get(key)
+            if entry is not None:
+                self._voices.move_to_end(key)
+                self.hits += 1
+                return entry
+            self.misses += 1
+
+        entry = _build_voice_entry(model_path)
+
+        with self._lock:
+            self._voices[key] = entry
+            while len(self._voices) > self.max_voices:
+                self._voices.popitem(last=False)
+        return entry
+
+    def clear(self):
+        """Полностью освобождает кэш (кнопка «Освободить память» в UI)."""
+        from rvc.lib.faiss_numpy import clear_cache as clear_index_cache  # noqa: PLC0415
+        from rvc.lib.predictors.f0 import clear_f0_cache  # noqa: PLC0415
+
+        with self._lock:
+            self._hubert = None
+            self._voices.clear()
+        clear_index_cache()
+        clear_f0_cache()
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+    def stats(self) -> dict:
+        with self._lock:
+            return {
+                "hubert_cached": self._hubert is not None,
+                "voices_cached": len(self._voices),
+                "max_voices": self.max_voices,
+                "hits": self.hits,
+                "misses": self.misses,
+            }
+
+
+CACHE = ModelCache()
+
+
+def _build_voice_entry(model_path: str):
+    """Строит синтезатор и конвертер для голосовой модели (без кэша)."""
+    # Загружаем состояние модели (mmap: без двойного расхода памяти)
+    try:
+        cpt = torch.load(model_path, map_location="cpu", weights_only=True, mmap=True)
+    except Exception:
+        cpt = torch.load(model_path, map_location="cpu", weights_only=True)
+
     if "config" not in cpt or "weight" not in cpt:
         raise ValueError(f"Некорректный формат модели {model_path}. Используйте модель RVC.")
 
@@ -81,9 +182,21 @@ def get_vc(model_path):
     net_g.load_state_dict(cpt["weight"], strict=False)
     net_g = net_g.to(config.device).float().eval()
 
-    # Инициализируем объект конвертера голоса
+    # Чекпойнт больше не нужен — освобождаем сразу (раньше жил до конца конвертации)
+    del cpt
+    gc.collect()
+
+    if config.torch_compile_enabled:
+        net_g = torch.compile(net_g, dynamic=True)
+
     vc = VC(tgt_sr, config)
-    return cpt, version, net_g, tgt_sr, vc, use_f0
+    return {"version": version, "net_g": net_g, "tgt_sr": tgt_sr, "vc": vc, "use_f0": use_f0}
+
+
+# Получает конвертер голоса (совместимость со старым API)
+def get_vc(model_path):
+    entry = CACHE.get_voice(model_path)
+    return entry["version"], entry["net_g"], entry["tgt_sr"], entry["vc"], entry["use_f0"]
 
 
 # Синтезирует текст в речь с использованием edge_tts.
@@ -115,37 +228,52 @@ def rvc_infer(
     audio_upscaling=False,  # FlashSR
     stereo_sound=False,
     output_format="wav",
-    progress=gr.Progress(track_tqdm=True),
+    progress=None,
+    progress_callback=None,
 ):
+    if progress is None and gr is not None:
+        progress = gr.Progress(track_tqdm=True)
+
+    if progress_callback is None:
+        progress_callback = lambda fraction, message: None  # noqa: E731
+
     if not rvc_model:
         raise ValueError("Не выбрана модель для RVC-инференса")
     if not os.path.exists(input_path):
         raise FileNotFoundError(f"Файл '{input_path}' не найден!")
 
-    display_progress(0, "\n[⚙️] Запуск конвейера генерации...", True)
+    display_progress(0, "\n[⚙️] Запуск конвейера генерации...", True, progress)
 
-    # Загружаем модель Hubert
-    display_progress(0.1, "Загружаем модель HuBERT...", False)
-    hubert_model = load_hubert(HUBERT_BASE_PATH)
-    # Загружаем модель RVC и индекс
-    display_progress(0.2, f"Загружаем модель '{rvc_model}'...", False)
+    # Загружаем модель HuBERT (кэшируется)
+    display_progress(0.1, "Загружаем модель HuBERT...", False, progress)
+    hubert_model = CACHE.get_hubert(HUBERT_BASE_PATH)
+    # Загружаем модель RVC и индекс (кэшируется)
+    display_progress(0.2, f"Загружаем модель '{rvc_model}'...", False, progress)
     model_path, index_path = load_rvc_model(rvc_model)
-    # Получаем конвертер голоса
-    display_progress(0.3, "Получаем конвертер голоса...", False)
-    cpt, version, net_g, tgt_sr, vc, use_f0 = get_vc(model_path)
+    # Получаем конвертер голоса (кэшируется)
+    display_progress(0.3, "Получаем конвертер голоса...", False, progress)
+    entry = CACHE.get_voice(model_path)
+    version, net_g, tgt_sr, vc, use_f0 = entry["version"], entry["net_g"], entry["tgt_sr"], entry["vc"], entry["use_f0"]
 
     # Построение имени выходного файла
     base_name = os.path.splitext(os.path.basename(input_path))[0]
     if len(base_name) > 100:  # Сменить имя выходного файла, если длина исходного более 100 символов
-        gr.Warning("Имя файла превышает 100 символов и будет сокращено для удобства.")
+        if gr is not None:
+            gr.Warning("Имя файла превышает 100 символов и будет сокращено для удобства.")
         base_name = f"{base_name[:25]}... (Made_in_PolGen)"
     output_path = os.path.join(OUTPUT_DIR, f"{base_name}_({rvc_model}).{output_format}")
 
     # Загружаем аудиофайл
-    display_progress(0.4, "Загружаем аудио...", False)
+    display_progress(0.4, "Загружаем аудио...", False, progress)
     audio = load_audio(input_path, 16000)
 
-    display_progress(0.5, f"[🌌] Преобразуем аудио '{base_name}'...", True)
+    display_progress(0.5, f"[🌌] Преобразуем аудио '{base_name}'...", True, progress)
+
+    def _pipeline_progress(fraction, message):
+        # Конвертация занимает диапазон 0.5..0.95 общего прогресса
+        display_progress(0.5 + 0.45 * fraction, message, False, progress)
+        progress_callback(0.5 + 0.45 * fraction, message)
+
     audio_opt = vc.pipeline(
         model=hubert_model,
         net_g=net_g,
@@ -167,24 +295,25 @@ def rvc_infer(
         autotune_tonic=autotune_tonic,
         autotune_scale=autotune_scale,
         autotune_strength=autotune_strength,
+        progress_callback=_pipeline_progress,
     )
 
     # Сохраняем файл
-    display_progress(0.8, "[💫] Сохраняем результат...", True)
+    display_progress(0.96, "[💫] Сохраняем результат...", True, progress)
     save_audio(audio_opt, tgt_sr, output_path, output_format, stereo_sound)
 
     if audio_upscaling:
-        display_progress(0.9, "[🚀] Улучшаем качество аудио...", True)
-        upscale(output_path, OUTPUT_DIR, 2, config.device)
+        if _upscale is None:
+            raise RuntimeError("Улучшение качества недоступно: пакет PolFlashSR не установлен")
+        display_progress(0.98, "[🚀] Улучшаем качество аудио...", True, progress)
+        _upscale(output_path, OUTPUT_DIR, 2, config.device)
 
-    # Освобождаем память
-    display_progress(0.95, "Освобождаем память...", False)
-    del hubert_model, cpt, net_g, vc
-    gc.collect()
-    torch.cuda.empty_cache()
+    display_progress(1.0, f"[✅] Преобразование завершено — {output_path}", True, progress)
+    progress_callback(1.0, "Готово")
 
-    display_progress(1.0, f"[✅] Преобразование завершено — {output_path}", True)
-    return gr.Audio(output_path, label=os.path.basename(output_path))
+    if gr is not None:
+        return gr.Audio(output_path, label=os.path.basename(output_path))
+    return output_path
 
 
 def rvc_edgetts_infer(
@@ -213,18 +342,19 @@ def rvc_edgetts_infer(
     tts_pitch=0,
     # FlashSR
     audio_upscaling=False,
-    progress=gr.Progress(track_tqdm=True),
+    progress=None,
+    progress_callback=None,
 ):
     if not tts_text:
         raise ValueError("Введите текст!")
     if not tts_voice:
         raise ValueError("Выберите голос!")
 
-    display_progress(1.0, "[🎙️] Синтезируем речь...", False)
+    display_progress(0.05, "[🎙️] Синтезируем речь...", False, progress)
     input_path = os.path.join(OUTPUT_DIR, "TTS_Voice.wav")
     asyncio.run(text_to_speech(tts_voice, tts_text, tts_rate, tts_volume, tts_pitch, input_path))
 
-    output_path = rvc_infer(
+    result = rvc_infer(
         rvc_model=rvc_model,
         input_path=input_path,
         f0_method=f0_method,
@@ -243,6 +373,37 @@ def rvc_edgetts_infer(
         audio_upscaling=audio_upscaling,
         stereo_sound=stereo_sound,
         output_format=output_format,
+        progress=progress,
+        progress_callback=progress_callback,
     )
 
-    return input_path, output_path
+    return input_path, result
+
+
+# ─── Вспомогательные функции для UI ────────────────────────────────────
+
+
+def list_rvc_models() -> list:
+    """Список установленных голосовых моделей."""
+    if not os.path.isdir(RVC_MODELS_DIR):
+        return []
+    return sorted(
+        (d for d in os.listdir(RVC_MODELS_DIR) if os.path.isdir(os.path.join(RVC_MODELS_DIR, d)) and not d.startswith(".")),
+        key=str.lower,
+    )
+
+
+def model_info(rvc_model: str) -> dict:
+    """Информация о модели: наличие индекса и размер файлов."""
+    model_path, index_path = load_rvc_model(rvc_model)
+    size_mb = os.path.getsize(model_path) / 1024**2
+    return {
+        "name": rvc_model,
+        "has_index": index_path is not None,
+        "size_mb": round(size_mb),
+    }
+
+
+def clear_model_cache():
+    """Освобождает память: сбрасывает кэш моделей и индексов."""
+    CACHE.clear()

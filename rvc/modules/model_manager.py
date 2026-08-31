@@ -3,9 +3,19 @@ import shutil
 import sys
 import zipfile
 
-import gradio as gr
-
 from rvc.modules.download_source import download_file
+
+try:
+    import gradio as gr
+except Exception:  # noqa: BLE001 - gradio не установлен (Android/TermUX и т.п.)
+
+    class _GradioStub:
+        """Минимальная замена gradio.Error вне Gradio-окружения."""
+
+        class Error(ValueError):
+            pass
+
+    gr = _GradioStub()
 
 # Путь к директории, где будут храниться модели RVC
 rvc_models_dir = os.path.join(os.getcwd(), "models", "RVC_models")
@@ -57,9 +67,10 @@ def rename_and_cleanup(extraction_folder, model_filepath, index_filepath):
 
 
 # Основная функция для скачивания модели по ссылке и распаковки zip-файла
-def download_from_url(url, dir_name, progress=gr.Progress()):
+def download_from_url(url, dir_name, progress=None):
     try:
-        progress(0, desc=f"[~] Загрузка голосовой модели {dir_name}...")
+        if progress is not None:
+            progress(0, desc=f"[~] Загрузка голосовой модели {dir_name}...")
         zip_name = os.path.join(rvc_models_dir, dir_name + ".zip")
         extraction_folder = os.path.join(rvc_models_dir, dir_name)
         if os.path.exists(extraction_folder):
@@ -67,7 +78,8 @@ def download_from_url(url, dir_name, progress=gr.Progress()):
             raise gr.Error(f"Директория голосовой модели {dir_name} уже существует! Выберите другое имя для вашей голосовой модели.")
 
         download_file(url, zip_name, progress)  # Скачивание файла
-        progress(0.8, desc="[~] Распаковка zip-файла...")
+        if progress is not None:
+            progress(0.8, desc="[~] Распаковка zip-файла...")
         extract_zip(extraction_folder, zip_name)  # Распаковка zip-файла
         return f"[+] Модель {dir_name} успешно загружена!"
     except Exception as e:
@@ -76,14 +88,15 @@ def download_from_url(url, dir_name, progress=gr.Progress()):
 
 
 # Функция для загрузки и распаковки zip-файла модели через интерфейс
-def upload_zip_file(zip_path, dir_name, progress=gr.Progress()):
+def upload_zip_file(zip_path, dir_name, progress=None):
     try:
         extraction_folder = os.path.join(rvc_models_dir, dir_name)
         if os.path.exists(extraction_folder):
             raise gr.Error(f"Директория голосовой модели {dir_name} уже существует! Выберите другое имя для вашей голосовой модели.")
 
         zip_name = zip_path.name
-        progress(0.8, desc="[~] Распаковка zip-файла...")
+        if progress is not None:
+            progress(0.8, desc="[~] Распаковка zip-файла...")
         extract_zip(extraction_folder, zip_name)  # Распаковка zip-файла
         return f"[+] Модель {dir_name} успешно загружена!"
     except Exception as e:
@@ -92,7 +105,7 @@ def upload_zip_file(zip_path, dir_name, progress=gr.Progress()):
 
 
 # Функция для загрузки отдельных файлов модели (.pth и .index)
-def upload_separate_files(pth_file, index_file, dir_name, progress=gr.Progress()):
+def upload_separate_files(pth_file, index_file, dir_name, progress=None):
     try:
         extraction_folder = os.path.join(rvc_models_dir, dir_name)
         if os.path.exists(extraction_folder):
@@ -101,13 +114,15 @@ def upload_separate_files(pth_file, index_file, dir_name, progress=gr.Progress()
         os.makedirs(extraction_folder, exist_ok=True)
 
         # Загружаем файл .pth
-        progress(0.4, desc="[~] Загрузка .pth файла...")
+        if progress is not None:
+            progress(0.4, desc="[~] Загрузка .pth файла...")
         if pth_file:
             pth_path = os.path.join(extraction_folder, os.path.basename(pth_file.name))
             shutil.copyfile(pth_file.name, pth_path)
 
         # Загружаем файл .index
-        progress(0.8, desc="[~] Загрузка .index файла...")
+        if progress is not None:
+            progress(0.8, desc="[~] Загрузка .index файла...")
         if index_file:
             index_path = os.path.join(extraction_folder, os.path.basename(index_file.name))
             shutil.copyfile(index_file.name, index_path)
