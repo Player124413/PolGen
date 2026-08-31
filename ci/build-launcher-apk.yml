@@ -1,0 +1,91 @@
+# Сборка APK-лаунчера PolGen со встроенным Termux.
+#
+# ⚠️ Этот файл лежит в ci/, потому что у бота нет права менять .github/workflows/.
+# Чтобы включить сборку, скопируй его туда:
+#   1. Открой этот файл на GitHub → Copy raw contents
+#   2. На GitHub: Add file → Create new file → имя: .github/workflows/build-launcher-apk.yml
+#   3. Вставь содержимое → Commit
+# После этого: вкладка Actions → «Android APK launcher (Termux bundled)» → Run workflow.
+#
+# Что делает workflow:
+#   - скачивает официальный Termux APK (universal, для всех 64-битных устройств;
+#     при отсутствии — arm64-v8a);
+#   - вкладывает его в лаунчер как assets/termux.apk;
+#   - собирает APK и подписывает ключом из репозитория (polgen-launcher-key.pem)
+#     — сигнатура совпадает с локальной сборкой, обновления встают поверх;
+#   - при запуске по тегу v* — прикрепляет APK к GitHub Release.
+#   Итоговый APK: ~55–95 МБ, ставится на чистый телефон, всё устанавливается
+#   из самого лаунчера с живым журналом прогресса.
+
+name: Android APK launcher (Termux bundled)
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install cryptography
+
+      - name: Get apktool
+        run: |
+          npm pack apktool-jar@2.4.1
+          tar xzf apktool-jar-2.4.1.tgz
+          echo "APKTOOL_JAR=$PWD/package/bin/apktool_2.4.1.jar" >> "$GITHUB_ENV"
+
+      - name: Download Termux APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p android/apk/assets
+          gh release download -R termux/termux-app -p '*universal*.apk' -O android/apk/assets/termux.apk \
+            || gh release download -R termux/termux-app -p '*arm64-v8a*.apk' -O android/apk/assets/termux.apk
+          ls -lh android/apk/assets/
+
+      - name: Build APK
+        run: |
+          java -jar "$APKTOOL_JAR" b android/apk -o PolGen-launcher-full-unsigned.apk
+          python android/apk/sign.py PolGen-launcher-full-unsigned.apk PolGen-launcher-full.apk android/apk/polgen-launcher-key.pem
+          rm -f PolGen-launcher-full-unsigned.apk
+          ls -lh PolGen-launcher-full.apk
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PolGen-launcher-full
+          path: PolGen-launcher-full.apk
+          retention-days: 30
+
+      - name: Attach to release (on tag)
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" PolGen-launcher-full.apk \
+            --title "PolGen launcher $GITHUB_REF_NAME" \
+            --notes "APK-лаунчер со встроенным Termux. Установи на телефон (Android 7+, 64-бит) — Termux, Python, PyTorch, FFmpeg и модели поставятся прямо из приложения, весь прогресс виден в его журнале." \
+          || gh release upload "$GITHUB_REF_NAME" PolGen-launcher-full.apk --clobber
