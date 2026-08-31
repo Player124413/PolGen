@@ -62,7 +62,7 @@ PolGen предоставляет гибкость в выборе моделе�
 > |-----------|---------|
 > | **Windows** | [`PolGen_Win.zip`](https://huggingface.co/Politrees/PolGen/resolve/main/Win/PolGen-1.3.0-beta.8_Win.zip?download=true) |
 > | **Linux** | [`PolGen_Linux.zip`](https://huggingface.co/Politrees/PolGen/resolve/main/Linux/PolGen-1.3.0-beta.8_Linux.zip?download=true) |
-> | **MacOS** | [`PolGen_MacOS.zip`](https://huggingface.co/Politrees/PolGen/resolve/main/MacOS/PolGen-1.2.1_MacOS.zip?download=true) |
+> | **MacOS** | [`PolGen_MacOS.zip`](https://huggingface.co/Politrees/PolGen/resolve/main/MacOS/PolGen-1.2.2_MacOS.zip?download=true) |
 >
 > **Запуск:**
 > - **Windows**: `run-PolGen.bat`
